@@ -2,7 +2,7 @@
 
 ## Folder structure
 The easiest way to use these files is to use the following folder structure:  
-.../Stata/
+.../Stata/  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; dofiles/ *(This repository.)*  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; raw/  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; temp/  
