@@ -5,6 +5,6 @@ global STATAPATH = "/Users/es.3386/Google Drive/Doktorand/Behavioral pred. marke
 
 cd "${STATAPATH}"
 
-*do "do-private/anonymize_data.do"
-do "dofiles/create_studydetails.do"
+*do "do-private/anonymize_data.do" // Not available to public
+*do "dofiles/create_studydetails.do"  // Not available to public until results are official
 do "dofiles/create_data.do"
