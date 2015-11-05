@@ -9,16 +9,16 @@ global k = 1
 
 /* Create trader-list
 ---------------------------------------------------------*/
-use "raw/prediction-market-user-final-credit.dta", clear
+use "../raw/prediction-market-user-final-credit.dta", clear
 gen int active=(credit<100)
 drop credit
 
-save "use/activetraders.dta", replace
+save "../use/activetraders.dta", replace
 
 
 /* Clean final holdings
 ---------------------------------------------------------*/
-use "raw/prediction-market-user-share-positions", clear
+use "../raw/prediction-market-user-share-positions", clear
 
 gen int study =.
 replace study=1 if market=="Abeler et al. (AER 2011)"
@@ -63,18 +63,18 @@ label define study 1 "Abeler et al. (AER 2011)" ///
 
 label values study study
 
-save "use/finalholdings.dta", replace
+save "../use/finalholdings.dta", replace
 
 
 /* Clean final credit
 ---------------------------------------------------------*/
-use "raw/prediction-market-user-final-credit", clear
-save "use/finalcredit.dta", replace
+use "../raw/prediction-market-user-final-credit", clear
+save "../use/finalcredit.dta", replace
 
 
 /* Clean pre-market survey data
 ---------------------------------------------------------*/
-use "raw/pre-market-survey.dta", clear
+use "../raw/pre-market-survey.dta", clear
 keep v8 v9 v10 q* userid
 drop q1
 
@@ -158,7 +158,7 @@ drop last dup
 
 
 // Only keep participants who were invited to the market
-merge 1:1 userid using "use/activetraders.dta"
+merge 1:1 userid using "../use/activetraders.dta"
 drop _merge
 label variable active "Active trader in the markets"
 keep if active!=.
@@ -167,7 +167,7 @@ keep if active!=.
 // Save
 preserve
 drop q*
-save "temp/pre-market-survey-wide.dta", replace
+save "../temp/pre-market-survey-wide.dta", replace
 restore
 
 
@@ -187,7 +187,7 @@ label variable qpricon "Confidence in final trading price (1st survey)"
 rename qe qkno
 label variable qkno "Knowledge of topic (1st survey)"
 
-merge m:1 userid using "temp/pre-market-survey-wide.dta"
+merge m:1 userid using "../temp/pre-market-survey-wide.dta"
 drop _merge
 
 rename startdate prestartdate
@@ -201,12 +201,12 @@ label variable prefinished "First survey finished"
 // Rescale likelihood answers from 0-100 to 0-1
 replace preqrep = preqrep/100
 
-save "use/pre-market-survey.dta", replace
+save "../use/pre-market-survey.dta", replace
 
 
 /* Clean post-market survey data
 ---------------------------------------------------------*/
-use "raw/post-market-survey.dta", clear
+use "../raw/post-market-survey.dta", clear
 keep v8 v9 v10 q* userid
 drop q1
 drop q104 // Free text answers
@@ -264,7 +264,7 @@ drop last dup
 
 
 // Only keep participants who were traded in the markets
-merge 1:1 userid using "use/activetraders.dta"
+merge 1:1 userid using "../use/activetraders.dta"
 drop _merge
 label variable active "Active trader in the markets"
 drop if active == 0
@@ -289,15 +289,15 @@ label variable postqrepcon "Confidence in likelihood of hypothesis to replicate 
 // Rescale likelihood answers from 0-100 to 0-1
 replace postqrep = postqrep/100
 
-save "use/post-market-survey.dta", replace
+save "../use/post-market-survey.dta", replace
 
 
 
 /* Clean transaction data
 ---------------------------------------------------------*/
-use "raw/prediction-market-transactions.dta", clear
+use "../raw/prediction-market-transactions.dta", clear
 
-merge m:1 userid using "raw/prediction-market-user-final-credit.dta", keep(match master)
+merge m:1 userid using "../raw/prediction-market-user-final-credit.dta", keep(match master)
 drop _merge
 
 rename tranasctionid transactionid
@@ -431,7 +431,7 @@ replace cash = round(cash,0.1)
 //bro credit cash if final==1 & credit!=cash
 /* Small differences due to rounding issues with selling for tiny share positions, overall fine. */
 
-save "use/transactions.dta", replace
+save "../use/transactions.dta", replace
 
 /* Gen study summary */
 preserve
@@ -451,7 +451,7 @@ label var transactions "Number of transactions in the market"
 rename netsales endsales
 label var endsales "Final sales in the market"
 
-save "temp/studysummary.dta", replace
+save "../temp/studysummary.dta", replace
 
 restore
 
@@ -483,7 +483,7 @@ drop C S
 /* finalholdings are exactly the same result as those in "prediction-market-user-share-positions" */
 
 /* Add system's final credit */
-merge m:1 userid using "use/finalcredit.dta", keep(match master)
+merge m:1 userid using "../use/finalcredit.dta", keep(match master)
 drop _merge
 rename credit finalcredit
 
@@ -494,17 +494,17 @@ label var finalcredit "User's final credit"
 label var finalholding "User's final share holdings in market"
 label var investmentworth "Purchasing price of user's final share holdings"
 
-save "temp/tradersummary.dta", replace
+save "../temp/tradersummary.dta", replace
 
 restore
 
 
 /* Combine surveys and add trader and study summaries
 ---------------------------------------------------------*/
-use "use/pre-market-survey.dta", clear
+use "../use/pre-market-survey.dta", clear
 label values study study
 
-merge 1:1 userid study using "use/post-market-survey.dta"
+merge 1:1 userid study using "../use/post-market-survey.dta"
 drop _merge
 
 order active userid study preqrep preqrepcon postqrep postqrepcon qpri qpricon qkno age gender yiacad position affiliation country nationality core  prestartdate preenddate prefinished poststartdate postenddate postfinished
@@ -533,64 +533,14 @@ gen postmin = (postenddate - poststartdate)/(1000*60)
 label variable postmin "Minutes spent on 2st survey"
 order premin postmin, after(qkno)
 
-/* Gen means and add them */
-mat drop _all
-sort study
-foreach var in "preqrep" "postqrep" "qpri"{
-	// Mean
-	preserve
-		collapse `var', by(study)
-		mkmat `var', mat(`var') rowname(study)
-		mat colnames `var' = "`var'_mean"
-		mat surveymeans = (nullmat( surveymeans), `var')
-	restore
-	
-	// Mean weighted by knowledge of topic
-	preserve
-		collapse `var' [fw=qkno], by(study)
-		mkmat `var', mat(`var'_fwkno) rowname(study)
-		mat colnames `var'_fwkno = "`var'_fwkno"
-		mat surveymeans = [surveymeans, `var'_fwkno]
-	restore
-	
-	// Mean weighted by confidence in answer
-	preserve
-		collapse `var' [fw=`var'con], by(study)
-		mkmat `var', mat(`var'_fwcon) rowname(study)
-		mat colnames `var'_fwcon = "`var'_fwcon"
-		mat surveymeans = [surveymeans, `var'_fwcon]
-	restore
-}
-
-preserve
-	clear
-	svmat surveymeans, names(col)
-	gen int study=_n
-	save "temp/surveymeans.dta", replace
-restore
-
-merge m:1 study using "temp/surveymeans.dta", keep(match master)
-drop _merge
-
-label var preqrep_mean "(mean)"
-label var preqrep_fwkno "(mean weighted by knowledge)"
-label var preqrep_fwcon "(mean weighted by confidence)"
-label var postqrep_mean "(mean)"
-label var postqrep_fwkno "(mean weighted by knowledge)"
-label var postqrep_fwcon "(mean weighted by confidence)"
-label var qpri_mean "(mean)"
-label var qpri_fwkno "(mean weighted by knowledge)"
-label var qpri_fwcon "(mean weighted by confidence)"
-
-
 
 /* Add study summary */
-merge m:1 study using "temp/studysummary.dta", keep(match master)
+merge m:1 study using "../temp/studysummary.dta", keep(match master)
 order endprice traders transactions endsales, after(study)
 drop _merge
 
 /* Add trader summary */
-merge 1:1 userid study using "temp/tradersummary.dta", keep(match master)
+merge 1:1 userid study using "../temp/tradersummary.dta", keep(match master)
 drop _merge
 bysort userid: egen temp = max(finalcredit)
 replace temp = 100 if temp==.
@@ -605,7 +555,7 @@ replace investmentworth=0 if investmentworth==.
 order finalholdings finalcredit increasecount decreasecount meantokens investmentworth, after(qkno)
 
 /* Add study details */
-merge m:1 study using "use/studydetails.dta", keep(match master)
+merge m:1 study using "../use/studydetails.dta", keep(match master)
 drop _merge
 
 
@@ -619,4 +569,4 @@ order p1 p2, after(p0)
 
 
 /* Save */
-save "use/marketsurveysummary.dta", replace
+save "../use/marketsurveysummary.dta", replace
