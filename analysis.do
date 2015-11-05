@@ -52,7 +52,7 @@ preserve
 	sum      suc_pred
 	
 	local r3 : display %9.2f r(mean)*100
-	local l3 = "succesful predictions by market prices (in %)"
+	local l3 = "successful predictions by market prices (in %)"
 restore
 
 
@@ -60,7 +60,9 @@ restore
   local r4 : display %9.2f `r1'/18*100
 	local l4 = "number of significant replications (in %)"
 
-	
+/*
+SHOULD WE REALLY DO DUPLICATES OR WILL THIS BE CONFUSING IN THE END
+(WILL INCREASE MAINTENANCE IN KEEPING TRACK)?
 /// [5]
 	local r5 : display %9.0f `r1'
 	local l5 = "number of significant replications (in absolute terms)"
@@ -69,7 +71,7 @@ restore
 /// [6]
 	local r6 : display %9.2f `r1'/18*100
 	local l6 = "number of significant replications (in %)"
-	
+*/	
 	
 /// [7]
 	local r7 = "what does the CI refer to?"
@@ -135,12 +137,12 @@ restore
 
 /// [13]
 	local r13 = "data from psychology replications needed"
-	local l13 = "chi² value of frequency comparisson with psych.rep."
+	local l13 = "chi² value of frequency comparison with psych.rep."
 
 
 /// [14]
 	local r14 = "data from psychology replications needed"
-	local l14 = "p-value of frequency comparisson (chi²) with psych.rep."
+	local l14 = "p-value of frequency comparison (chi²) with psych.rep."
 
 
 /// [15]
@@ -195,7 +197,7 @@ preserve
 	sum      endprice
 
 	local r19 : display %9.2f r(mean)*100
-	local l19 = "mean predition market final price (in %)"
+	local l19 = "mean prediction market final price (in %)"
 restore
 
 
@@ -205,7 +207,7 @@ preserve
 	sum      endprice
 
 	local r20 : display %9.2f r(min)*100
-	local l20 = "lowest predition market final price (in %)"
+	local l20 = "lowest prediction market final price (in %)"
 restore
 
 
@@ -215,7 +217,7 @@ preserve
 	sum      endprice
 
 	local r21 : display %9.2f r(max)*100
-	local l21 = "highest predition market final price (in %)"
+	local l21 = "highest prediction market final price (in %)"
 restore
 
 
@@ -388,6 +390,8 @@ preserve
 	local r39 = "to clarify: absolute prediction error"
 	local l39 = "p-value of paired t-test (absolute prediction error)"
 restore
+
+/// [40] mean/median replication power
 
 
 ******************
