@@ -4,6 +4,7 @@ set more off
 use "../use/marketsurveysummary.dta", clear
 sort study userid
 
+
 ********************************************************************************
 *** IMPORTANT REMARKS
 ********************************************************************************
@@ -335,6 +336,7 @@ restore
 
 /// [35]
 preserve
+	keep if active==1 // Only keep traders who traded on the market
 	collapse preqrep result, by(study)
 	
 	gen      correctly_predicted = 0
@@ -355,6 +357,7 @@ restore
 
 /// [37]
 preserve
+	keep if active==1 // Only keep traders who traded on the market
 	collapse preqrep result, by(study)
 	
 	gen      correctly_predicted = 0
@@ -369,6 +372,7 @@ restore
 
 /// [38]
 preserve
+	keep if active==1 // Only keep traders who traded on the market
 	collapse endprice preqrep result, by(study)
 
 	local r38 = "to clarify: absolute prediction error"
@@ -378,6 +382,7 @@ restore
 
 /// [39]
 preserve
+	keep if active==1 // Only keep traders who traded on the market
 	collapse endprice preqrep result, by(study)
 
 	local r39 = "to clarify: absolute prediction error"
