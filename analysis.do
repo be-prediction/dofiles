@@ -390,6 +390,38 @@ preserve
 restore
 
 
+******************
+*** UNNUMBERED ***
+******************
+
+/// SM "The Pearson correlation between the market prices and the pre-market survey"
+preserve
+	keep if active==1 // Only keep traders who traded on the market
+	collapse preqrep endprice, by(study)
+	pwcorr preqrep endprice, sig obs
+restore
+
+/// SM "market price and survey range and a mean"
+preserve
+	keep if active==1 // Only keep traders who traded on the market
+	collapse preqrep endprice, by(study)
+	sum preqrep endprice
+restore
+
+/// SM "The point-biserial correlation coefficient between the pre-survey and the outcome of the replication"
+preserve
+	keep if active==1 // Only keep traders who traded on the market
+	collapse preqrep result, by(study)
+  
+	replace result=2 if result==0
+	esize   twosample preqrep, by(result) pbcorr
+	
+	pwcorr result preqrep, sig obs
+restore
+
+/// SM "The absolute prediction error pre-market survey"
+
+
 
 
 ********************************************************************************
