@@ -568,5 +568,10 @@ replace p2 = ((endprice-a1)*(1-powrep_plan))/((1-endprice)*(powrep_plan-a1)) if 
 order p1 p2, after(p0)
 
 
+/* Create relative effect sizes */
+gen erel = erep/eorig
+label var erel "Relative effect size (r) of replication to original"
+
+
 /* Save */
 save "../use/marketsurveysummary.dta", replace

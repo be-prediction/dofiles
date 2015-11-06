@@ -3,6 +3,28 @@ cd "${STATAPATH}"
 
 use "../use/marketsurveysummary.dta", clear
 
+******************
+*** MAIN PAPER ***
+******************
+
+// Table 1. Replication results
+preserve
+collapse eorig erep erel porig prep result, by(study)
+
+mkmat *, mat(summary) rowname(study)
+local varlabels ""
+forval i=1/18{
+	local name: label study `i'
+	local varlabels  `varlabels'  `i' "`name'"
+}
+display `"`varlabels'"'
+estout matrix(summary, fmt(%12.2g %12.2f %12.2f %12.2f %12.3g %12.3g %12.2g)) ///
+using "../tables/tab-1.tex", ///
+replace style(tex) ml(,none lhs(%)) coll(,none lhs(%)) ///
+varlabels(1 "Abeler et al. (AER 2011)" "`varlabels'") ///
+nolz
+
+restore
 
 *******************************
 *** SUPPLEMENTARY MATERIALS ***
@@ -27,7 +49,8 @@ forval i=1/18{
 	local varlabels  `varlabels'  `i' "`name'"
 }
 display `"`varlabels'"'
-estout matrix(summary, fmt(%12.2g %12.2g %12.2g %12.2f %12.2f %12.2f)) using "../tables/supmat_tab-s4.tex", ///
+estout matrix(summary, fmt(%12.2g %12.2g %12.2g %12.2f %12.2f %12.2f)) ///
+using "../tables/supmat_tab-s4.tex", ///
 replace style(tex) ml(,none lhs(%)) coll(,none lhs(%)) ///
 varlabels(1 "Abeler et al. (AER 2011)" "`varlabels'") ///
 nolz

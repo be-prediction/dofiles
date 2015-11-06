@@ -5,438 +5,186 @@ use "../use/marketsurveysummary.dta", clear
 sort study userid
 
 
-********************************************************************************
-*** IMPORTANT REMARKS
-********************************************************************************
-*** This do-file computes all the results of the google-docs draft of the paper
-*** in a sequential order. To avoid any problems when updating the google-docs
-*** file, I copied the draft into a Word file and numbered each single result.
-*** The Word file this do-file refers to has been uploaded to the "do-files" 
-*** folder of the git-repository.
 
-*** Each result is stored as local variable. So just run the do-file and all
-*** results will be displayed in Stata's result window within a loop.
-********************************************************************************
-
-
-/// [1] Number of significant Replications
+/// [1] Number of significant Replications, with confidence interval
 preserve
 	collapse result, by(study)
-	sum      result
-	
-	local r1 : display %9.0f r(mean)*18
-	local l1 = "number of significant replications (in absolute terms)"
+	display "Number of successful replications:"
+	count if result ==1
+	mean result
 restore
 
 
-/// [2]
+/// [2] Pre-market survey statistics
 preserve
-	* effect size variables not yet part of the data set
-	gen effectsize = rnormal(0.6,0.1) 
-	
-	collapse effectsize result, by(study)
-	sum      effectsize if result == 1
-	
-	local r2 : display %9.2f r(mean)*100
-	local l2 = "average relative effect size of replicated studies (in percent)"
+	keep if active==1
+	collapse preqrep, by(study)
+	sum preqrep, d
+	mean preqrep
 restore
 
-
-/// [3]
+/// [3] Mean/median planned power of replications
 preserve
-	gen      suc_pred = 0
-	replace  suc_pred = 1 if endprice > 0.5 & result==1
-	replace  suc_pred = 1 if endprice < 0.5 & result==0
-	
-	collapse suc_pred, by(study)
-	sum      suc_pred
-	
-	local r3 : display %9.2f r(mean)*100
-	local l3 = "successful predictions by market prices (in %)"
+	sum powrep_plan, d
 restore
 
 
-/// [4]
-  local r4 : display %9.2f `r1'/18*100
-	local l4 = "number of significant replications (in %)"
-
-/*
-SHOULD WE REALLY DO DUPLICATES OR WILL THIS BE CONFUSING IN THE END
-(WILL INCREASE MAINTENANCE IN KEEPING TRACK)?
-/// [5]
-	local r5 : display %9.0f `r1'
-	local l5 = "number of significant replications (in absolute terms)"
-
-
-/// [6]
-	local r6 : display %9.2f `r1'/18*100
-	local l6 = "number of significant replications (in %)"
-*/	
-	
-/// [7]
-	local r7 = "what does the CI refer to?"
-	local l7 = "lower bound of confidence interval of sig. replications"
-	
-	
-/// [8]
-	local r8 = "what does the CI refer to?"
-	local l8 = "upper bound of confidence interval of sig. replications"
-	
-
-/// [9]
+/// [4] Pearson correlation between market price and replication outcome
 preserve
-	* effect size variables not yet part of the data set
-	gen effectsize = rnormal(0.6,0.1) 
-	
-	collapse effectsize result, by(study)
-	sum      effectsize if result == 1
-	
-	local r9 : display %9.2f r(mean)*100
-	local l9 = "average relative effect size of replicated studies (in %)"
+	collapse endprice result, by(study)
+	pwcorr endprice result, sig
 restore
 
 
-/// [10]
+/// [5] Pearson’s Chi2 test of replication rates: RPP vs. BERP
 preserve
-	* effect size variables not yet part of the data set
-	gen effectsize = rnormal(0.6,0.1) 
-	
-	collapse effectsize result, by(study)
-	sum      effectsize if result == 1
-	
-	local r10 : display %9.2f r(sd)*100
-	local l10 = "SD of relative effect size of replicated studies (in %)"
+	clear
+	local totobs = 97 + 18
+	set obs `totobs'
+	gen study =(_n>97)
+	label define studyname 0 "RPP" 1 "BERP"
+	label val study studyname
+	gen result = .
+	replace result = (_n <= 35) if study==0
+	replace result = (_n <= 108) if study==1
+	label define resultname 0 "Not replicated" 1 "Replicated"
+	label val result resultname
+	tabulate study result, chi2
 restore
 
 
-/// [11]
+/// [6] Pearson correlation between original p-value and replication outcome
 preserve
-	* effect size variables not yet part of the data set
-	gen effectsize = rnormal(0.6,0.1) 
-	
-	collapse effectsize result, by(study)
-	sum      effectsize if result == 1
-	
-	local r11 : display %9.2f r(min)*100
-	local l11 = "minimum relative effect size of replicated studies (in %)"
+	collapse porig result, by(study)
+	pwcorr porig result, sig
 restore
-
-
-/// [12]
+	
+	
+/// [7] Number of studies with original p-value <0.01 that didn't replicate
 preserve
-	* effect size variables not yet part of the data set
-	gen effectsize = rnormal(0.6,0.1) 
-	
-	collapse effectsize result, by(study)
-	sum      effectsize if result == 1
-	
-	local r12 : display %9.2f r(max)*100
-	local l12 = "maximum relative effect size of replicated studies (in %)"
+	collapse porig result, by(study)
+	// 0.0099 to take care of floating point problems
+	count if porig<=0.0099
+	count if porig<=0.0099 & result==0
 restore
 
 
-/// [13]
-	local r13 = "data from psychology replications needed"
-	local l13 = "chi² value of frequency comparison with psych.rep."
-
-
-/// [14]
-	local r14 = "data from psychology replications needed"
-	local l14 = "p-value of frequency comparison (chi²) with psych.rep."
-
-
-/// [15]
+/// [8] Pearson correlation between original sample size and replication outcome
 preserve
-	collapse porig prep, by(study)
-	pwcorr   porig prep, sig obs
-
-	local r15 : display %9.3f r(rho)
-	local l15 = "pearson correlation of original and replication p-values"
+	collapse norig result, by(study)
+	pwcorr norig result, sig
 restore
-
-
-/// [16]
+	
+	
+/// [9] Market participant statistics
 preserve
-	collapse porig prep, by(study)
-	pwcorr   porig prep, sig obs
+	count
+	count if active==1
+	count if active==1 & postfinished==1
 	
-	local    t = (abs(r(rho)) * sqrt(r(N) - 2)) / (sqrt(1 - abs(r(rho))^2))
-	local    p = 2*ttail(r(N)-2,`t')
-	
-	local r16 : display %9.3f `p'
-	local l16 = "p-value of correlation of original and replication p-values"
 restore
-
-
-/// [17]
-preserve
-	collapse norig prep, by(study)
-	pwcorr   norig prep, sig obs
-
-	local r17 : display %9.3f r(rho)
-	local l17 = "pearson correlation of original n- and replication p-values"
-restore
-
-
-/// [18]
-preserve
-	collapse norig prep, by(study)
-	pwcorr   norig prep, sig obs
 	
-	local    t = (abs(r(rho)) * sqrt(r(N) - 2)) / (sqrt(1 - abs(r(rho))^2))
-	local    p = 2*ttail(r(N)-2,`t')
 	
-	local r18 : display %9.3f `p'
-	local l18 = "p-value of correlation of original n- and replication p-values"
-restore
-
-
-/// [19]
+/// [10] Prediction market final price statistics, with confidence interval
 preserve
 	collapse endprice, by(study)
-	sum      endprice
-
-	local r19 : display %9.2f r(mean)*100
-	local l19 = "mean prediction market final price (in %)"
+	sum endprice, d
+	mean endprice
 restore
 
 
-/// [20]
+/// [11] Pearson correlation between pre-market survey and replication outcome
 preserve
-	collapse endprice, by(study)
-	sum      endprice
-
-	local r20 : display %9.2f r(min)*100
-	local l20 = "lowest prediction market final price (in %)"
-restore
-
-
-/// [21]
-preserve
-	collapse endprice, by(study)
-	sum      endprice
-
-	local r21 : display %9.2f r(max)*100
-	local l21 = "highest prediction market final price (in %)"
-restore
-
-
-/// [22]
-	local r22 : display %9.2f `r19'
-	local l22 = "expected replications (in %)"
-
-
-/// [23]
-preserve
-	collapse result, by(study)
-	sum      result
-
-	local r23 : display %9.2f r(mean)*100
-	local l23 = "replication rate (in %)"
-restore
-
-
-/// [24]
-preserve
-	collapse endprice result, by(study)
-	gen      correctly_predicted = 0
-	replace  correctly_predicted = 1 if endprice > 0.5 & result == 1
-	replace  correctly_predicted = 1 if endprice < 0.5 & result == 0
-	sum      correctly_predicted
-
-	local r24 : display %9.2f r(mean)*100
-	local l24 = "correctly predicted by final price (in %)"
-restore
-
-
-/// [25]
-  local r25 : display %9.0f `r24'*0.18
-	local l25 = "number of correctly predicted studies (in absolute terms)"
-
-
-/// [26]
-preserve
-	collapse endprice result, by(study)
-	gen      correctly_predicted = 0
-	replace  correctly_predicted = 1 if endprice > 0.5 & result == 1
-	replace  correctly_predicted = 1 if endprice < 0.5 & result == 0
-	bitest   correctly_predicted == 0.5, detail
-
-	local r26 : display %9.3f r(p)
-	local l26 = "(two-sided p-value of binomial test (correctly predicted = 0.5)"
-restore
-
-
-/// [27]
-preserve
-	collapse endprice result, by(study)
-  
-	replace result=2 if result==0
-	esize   twosample endprice, by(result) pbcorr
-	
-	local r27 : display %9.3f r(r_pb)
-	local l27 = "point-biserial correlation coefficient"
-restore
-
-
-/// [28]
-preserve
-	collapse endprice result, by(study)
-
-	replace result=2 if result==0
-	ttest   endprice, by(result)
-	
-	local r28 : display %9.3f r(p)
-	local l28 = "p-value of point-biserial correlation"
-restore
-
-
-/// [29]
-  reg   result endprice, robust
-	
-	local r29 : display %9.3f _b[endprice]
-	local l29 = "coefficient of endprice in LPM"
-	
-	
-/// [30]
-	reg   result endprice, robust
-	test  endprice = 0
-	
-	local r30 : display %9.3f r(p)
-	local l30 = "p-value for coefficient test different from 0"
-
-
-/// [31]
-	reg   result endprice, robust
-	test  endprice = 1
-	
-	local r31 : display %9.3f r(p)
-	local l31 = "p-value for coefficient test different from 1"
-
-
-/// [32]
-	reg   result endprice, robust
-	
-	local r32 : display %9.3f _b[_cons]
-	local l32 = "coefficient of constant in LPM"
-
-
-/// [33]
-	reg   result endprice, robust
-	
-	local r33 : display %9.3f _b[_cons]/_se[_cons]
-	local l33 = "t-value of coefficient of constant in LPM"
-	
-	
-/// [34]
-	reg   result endprice, robust
-	test  _cons = 0
-	
-	local r34 : display %9.3f r(p)
-	local l34 = "p-value for coefficient test different from 0"
-
-
-/// [35]
-preserve
-	keep if active==1 // Only keep traders who traded on the market
+	keep if active==1
 	collapse preqrep result, by(study)
-	
-	gen      correctly_predicted = 0
-	replace  correctly_predicted = 1 if preqrep > 0.5 & result == 1
-	replace  correctly_predicted = 1 if preqrep < 0.5 & result == 0
-	
-	sum      correctly_predicted
-	
-	local r35 : display %9.2f r(mean)*100
-	local l35 = "survey mean correctly predicted (in %)"	
+	pwcorr preqrep result, sig
 restore
 
 
-/// [36]
-	local r36 : display %9.0f `r35'*0.18
-	local l36 = "number of studies correctly predicted by surveys"
-
-
-/// [37]
+/// [12] Pearson correlation between pre-market survey and final market prices
 preserve
-	keep if active==1 // Only keep traders who traded on the market
-	collapse preqrep result, by(study)
-	
-	gen      correctly_predicted = 0
-	replace  correctly_predicted = 1 if preqrep > 0.5 & result == 1
-	replace  correctly_predicted = 1 if preqrep < 0.5 & result == 0
-	bitest   correctly_predicted == 0.5, detail
-
-	local r37 : display %9.3f r(p)
-	local l37 = "(two-sided p-value of binomial test (correctly predicted = 0.5)"
-restore
-
-
-/// [38]
-preserve
-	keep if active==1 // Only keep traders who traded on the market
-	collapse endprice preqrep result, by(study)
-
-	local r38 = "to clarify: absolute prediction error"
-	local l38 = "t-value of paired t-test (absolute prediction error)"
-restore
-
-
-/// [39]
-preserve
-	keep if active==1 // Only keep traders who traded on the market
-	collapse endprice preqrep result, by(study)
-
-	local r39 = "to clarify: absolute prediction error"
-	local l39 = "p-value of paired t-test (absolute prediction error)"
-restore
-
-/// [40] mean/median replication power
-
-
-******************
-*** UNNUMBERED ***
-******************
-
-/// SM "The Pearson correlation between the market prices and the pre-market survey"
-preserve
-	keep if active==1 // Only keep traders who traded on the market
+	keep if active==1
 	collapse preqrep endprice, by(study)
-	pwcorr preqrep endprice, sig obs
+	pwcorr preqrep endprice, sig
 restore
 
-/// SM "market price and survey range and a mean"
+
+// [13] Absolute prediction error comparison between pre-market survey and final market prices
 preserve
-	keep if active==1 // Only keep traders who traded on the market
-	collapse preqrep endprice, by(study)
-	sum preqrep endprice
+	keep if active==1
+	collapse preqrep endprice result, by(study)
+	gen abs_price = abs(endprice-result)
+	gen abs_pre = abs(preqrep-result)
+	ttest abs_pre==abs_surv
 restore
 
-/// SM "The point-biserial correlation coefficient between the pre-survey and the outcome of the replication"
+
+/// [14] Post-market survey statistics
 preserve
-	keep if active==1 // Only keep traders who traded on the market
+	keep if postfinished==1
+	collapse postqrep, by(study)
+	sum postqrep, d
+	mean postqrep
+restore
+
+
+/// [15] Pearson correlation between pre- and post-market survey
+preserve
+	bysort study: egen preqrep_mean = mean(preqrep) if active==1
+	bysort study: egen postqrep_mean = mean(postqrep) if postfinished==1
+	collapse preqrep_mean postqrep_mean, by(study)
+	pwcorr preqrep_mean postqrep_mean, sig
+restore
+
+
+/// [16] Pearson correlation between post-market survey and replication outcome
+preserve
+	keep if postfinished==1
+	collapse postqrep result, by(study)
+	pwcorr  postqrep result, sig
+restore
+
+
+// [17] Absolute prediction error comparison between pre- and post-market survey
+preserve
+	bysort study: egen preqrep_mean = mean(preqrep) if active==1
+	bysort study: egen postqrep_mean = mean(postqrep) if postfinished==1
+	collapse preqrep_mean postqrep_mean result, by(study)
+	gen abs_pre = abs(preqrep_mean-result)
+	gen abs_post = abs(postqrep_mean-result)
+	ttest abs_pre==abs_post
+restore
+
+
+// [18] Absolute prediction error comparison between post-market survey and final market prices
+preserve
+	keep if postfinished==1
+	collapse postqrep endprice result, by(study)
+	gen abs_price = abs(endprice-result)
+	gen abs_post = abs(postqrep-result)
+	ttest abs_price==abs_post
+restore
+
+
+/// [19] Pearson correlation between pre-market survey (traders) and pre-market survey (all)
+preserve
+	bysort study: egen preqrep_meanall = mean(preqrep)
+	bysort study: egen preqrep_meanactive = mean(preqrep) if active==1
+	collapse preqrep_meanactive preqrep_meanall, by(study)
+	pwcorr preqrep_meanactive preqrep_meanall, sig
+restore
+
+
+/// [20] Pre-market survey statistics (all)
+preserve
+	collapse preqrep, by(study)
+	sum preqrep, d
+	mean preqrep
+restore
+
+
+/// [21] Pearson correlation between pre-market survey (all) and replication outcome
+preserve
 	collapse preqrep result, by(study)
-  
-	replace result=2 if result==0
-	esize   twosample preqrep, by(result) pbcorr
-	
-	pwcorr result preqrep, sig obs
+	pwcorr preqrep result, sig
 restore
-
-/// SM "The absolute prediction error pre-market survey"
-
-
-
-
-********************************************************************************
-*** Display Results ***
-********************************************************************************
-global n = 39
-forvalues i = 1 (1) $n {
-	dis "------------------------------------------------------------------------"
-	dis "Result [`i']: `l`i''"
-	dis "`r`i''"
-	dis "------------------------------------------------------------------------"
-}
-
-
