@@ -115,7 +115,7 @@ preserve
 	collapse preqrep endprice result, by(study)
 	gen abs_price = abs(endprice-result)
 	gen abs_pre = abs(preqrep-result)
-	ttest abs_pre==abs_surv
+	ttest abs_price==abs_pre
 restore
 
 
