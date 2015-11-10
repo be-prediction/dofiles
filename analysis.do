@@ -81,7 +81,6 @@ preserve
 	count
 	count if active==1
 	count if active==1 & postfinished==1
-	
 restore
 	
 	
@@ -188,3 +187,68 @@ preserve
 	collapse preqrep result, by(study)
 	pwcorr preqrep result, sig
 restore
+
+
+/// [22] Power simulations of relation between market price and replication outcomes
+use "../use/marketsurveysummary.dta", clear
+collapse endprice, by(study)
+
+/* Linear model power estimation */
+set seed 1392393485
+local num_iterations = 10000
+local share_sig = 0
+forval i = 1/`num_iterations'{
+	preserve
+	qui gen rand = uniform()
+	qui gen int result = (endprice >= rand)
+	qui reg result endprice, vce(r)
+	qui mat def b = e(b)
+	qui mat def V = e(V)
+	local est = b[1,1]
+	local se = sqrt(V[1,1])
+	local t = `est'/`se'
+	local p = 2*(1-t(16, abs(`t')))
+	if `p'<=0.05{
+		local share_sig_reg = `share_sig_reg' + 1/`num_iterations'
+	}
+	restore
+}
+sca def share_sig_reg = `share_sig'
+display share_sig_reg // Share is 0.1854 for seed 1392393485 & 10k iterations
+
+
+use "../use/marketsurveysummary.dta", clear
+collapse endprice, by(study)
+
+/* Pearson correlation estimation */
+set seed 1392393485
+local num_iterations = 10000
+local tot_sig_corr = 0
+local tot_est_corr = 0
+local ok_iterations = 0
+forval i = 1/`num_iterations'{
+	preserve
+	qui gen rand = uniform()
+	qui gen result = (endprice >= rand)
+	qui pwcorr endprice result
+	local est = r(rho)
+	if `est'!=.{
+		local t = `est'/sqrt((1-`est'^2)/16)
+		local p = 1-t(16, `t') // One tailed t-test of positive correlation
+		if `p'<=0.05{
+			local tot_sig_corr = `tot_sig_corr' + 1
+		}
+		if `est'/`num_iterations'!=.{
+			local tot_est_corr = `tot_est_corr' + `est'	
+		}
+		local ok_iterations = `ok_iterations' + 1
+	}
+	restore
+}
+local share_sig_corr = `tot_sig_corr'/`ok_iterations'
+local mean_corr = `tot_est_corr'/`ok_iterations'
+display "Ok iterations: "  `ok_iterations' // Ok iterations is 9940 for seed 1392393485 & 10k iterations
+display "Power: " `share_sig_corr' // Share is .24426559 for seed 1392393485 & 10k iterations
+display "Mean: " `mean_corr' // Mean is .25045509 for seed 1392393485 & 10k iterations
+
+use "../use/marketsurveysummary.dta", clear
