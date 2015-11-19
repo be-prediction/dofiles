@@ -7,6 +7,49 @@ global b = 100
 global k = 1
 
 
+/* Clean RPP data
+---------------------------------------------------------*/
+import delimited "../raw/rpp_data.csv", encoding(ISO-8859-1)
+save "../use/rpp-data.dta", replace
+
+
+/* Clean RPP market data
+---------------------------------------------------------*/
+import excel "../raw/rpp-market-data.xlsx", sheet("table_ZRoutvA(1).csv") firstrow clear
+rename Hypothesis study
+rename C hypothesis
+rename Outcomeoforiginalstudy resultorig
+rename Outcomeofreplicationyesno resultrep
+rename Marketprice endprice
+rename Surveyresult preqrep
+rename Weightedsurveyresult preqrep_w
+rename OriginalN norig
+rename Originalpower poworig
+rename ReplicationN nrep
+rename Replicationpower powrep
+rename Replicationpvalue prep
+rename NumberOfTrades transactions
+rename Vol volume
+drop A sdev_survey
+
+foreach var in resultorig resultrep preqrep preqrep_w nrep p2{
+	replace `var' = "" if `var'=="NA"
+	destring `var', replace
+}
+
+foreach var in resultorig resultrep{
+	replace `var'="1" if `var'=="Yes"
+	replace `var'="0" if `var'=="No"
+	destring `var', replace
+}
+
+replace prep = "0.001" if prep=="<0.001"
+replace prep = "0.00001" if prep=="<0.00001"
+destring prep, replace
+
+save "../use/rpp-market-data.dta", replace
+
+
 /* Create trader-list
 ---------------------------------------------------------*/
 use "../raw/prediction-market-user-final-credit.dta", clear
@@ -438,9 +481,12 @@ preserve
 
 drop if numshares==.
 sort userid study timestamp
-collapse (last) timestamp (last) price (count) transactionid  (last) netsales, by(userid study)
+
+gen volume = abs(numshares)
+
+collapse (last) timestamp (last) price (count) transactionid  (last) netsales (sum) volume, by(userid study)
 sort study timestamp
-collapse (last) price (count) userid (sum) transactionid (last) netsales, by(study)
+collapse (last) price (count) userid (sum) transactionid (last) netsales (sum) volume, by(study)
 
 rename price endprice
 label var endprice "Final price"
@@ -450,6 +496,7 @@ rename transactionid transactions
 label var transactions "Number of transactions in the market"
 rename netsales endsales
 label var endsales "Final sales in the market"
+label var volume "Number of shares traded in the market"
 
 save "../temp/studysummary.dta", replace
 
@@ -536,7 +583,7 @@ order premin postmin, after(qkno)
 
 /* Add study summary */
 merge m:1 study using "../temp/studysummary.dta", keep(match master)
-order endprice traders transactions endsales, after(study)
+order endprice traders transactions volume endsales, after(study)
 drop _merge
 
 /* Add trader summary */

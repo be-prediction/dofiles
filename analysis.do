@@ -193,38 +193,13 @@ restore
 use "../use/marketsurveysummary.dta", clear
 collapse endprice, by(study)
 
-/* Linear model power estimation */
-set seed 1392393485
-local num_iterations = 10000
-local share_sig = 0
-forval i = 1/`num_iterations'{
-	preserve
-	qui gen rand = uniform()
-	qui gen int result = (endprice >= rand)
-	qui reg result endprice, vce(r)
-	qui mat def b = e(b)
-	qui mat def V = e(V)
-	local est = b[1,1]
-	local se = sqrt(V[1,1])
-	local t = `est'/`se'
-	local p = 2*(1-t(16, abs(`t')))
-	if `p'<=0.05{
-		local share_sig_reg = `share_sig_reg' + 1/`num_iterations'
-	}
-	restore
-}
-sca def share_sig_reg = `share_sig'
-display share_sig_reg // Share is 0.1854 for seed 1392393485 & 10k iterations
-
-
-use "../use/marketsurveysummary.dta", clear
-collapse endprice, by(study)
-
 /* Pearson correlation estimation */
 set seed 1392393485
 local num_iterations = 10000
-local tot_sig_corr = 0
-local tot_est_corr = 0
+local tot_os = 0
+local tot_ts = 0
+local tot_tsneg = 0
+local tot_est = 0
 local ok_iterations = 0
 forval i = 1/`num_iterations'{
 	preserve
@@ -234,21 +209,42 @@ forval i = 1/`num_iterations'{
 	local est = r(rho)
 	if `est'!=.{
 		local t = `est'/sqrt((1-`est'^2)/16)
-		local p = 1-t(16, `t') // One tailed t-test of positive correlation
-		if `p'<=0.05{
-			local tot_sig_corr = `tot_sig_corr' + 1
+		local pos = 1-t(16, `t') // One tailed t-test of positive correlation
+		local pts = 2*(1-t(16, abs(`t'))) // Two tailed t-test of difference from 0
+		if `pos'<=0.025{
+			local tot_os = `tot_os' + 1
 		}
-		if `est'/`num_iterations'!=.{
-			local tot_est_corr = `tot_est_corr' + `est'	
+		if `pts'<=0.05{
+			local tot_ts = `tot_ts' + 1
 		}
+		if `pts'<=0.05 & `est'<0{
+			local tot_tsneg = `tot_tsneg' + 1
+		}
+		local tot_est = `tot_est' + `est'	
 		local ok_iterations = `ok_iterations' + 1
 	}
 	restore
 }
-local share_sig_corr = `tot_sig_corr'/`ok_iterations'
-local mean_corr = `tot_est_corr'/`ok_iterations'
-display "Ok iterations: "  `ok_iterations' // Ok iterations is 9940 for seed 1392393485 & 10k iterations
-display "Power: " `share_sig_corr' // Share is .24426559 for seed 1392393485 & 10k iterations
-display "Mean: " `mean_corr' // Mean is .25045509 for seed 1392393485 & 10k iterations
+local share_os = `tot_os'/`ok_iterations'
+local share_ts = `tot_ts'/`ok_iterations'
+local share_tsneg = `tot_tsneg'/`ok_iterations'
+local mean = `tot_est'/`ok_iterations'
+
+display "Ok iterations: "  `ok_iterations'
+display "Power one sided (alpha=0.025): " `share_os' " (count=" `tot_os' ")"
+display "Power two sided (alpha=0.050): " `share_ts' " (count=" `tot_ts' ")"
+display "Difference: " `share_tsneg' " (count=" `tot_tsneg' ")"
+display "Mean: " `mean'
 
 use "../use/marketsurveysummary.dta", clear
+
+
+/// [23] Pearson correlation between original sample size and replication outcome
+preserve
+	collapse norig result, by(study)
+	pwcorr norig result, sig
+restore
+
+
+
+
