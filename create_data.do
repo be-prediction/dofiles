@@ -244,6 +244,7 @@ label variable prefinished "First survey finished"
 // Rescale likelihood answers from 0-100 to 0-1
 replace preqrep = preqrep/100
 
+
 save "../use/pre-market-survey.dta", replace
 
 
@@ -484,9 +485,11 @@ sort userid study timestamp
 
 gen volume = abs(numshares)
 
-collapse (last) timestamp (last) price (count) transactionid  (last) netsales (sum) volume, by(userid study)
+gen investedpoints = invested - returned
+
+collapse (last) timestamp (last) price (count) transactionid  (last) netsales (sum) volume (sum) investedpoints, by(userid study)
 sort study timestamp
-collapse (last) price (count) userid (sum) transactionid (last) netsales (sum) volume, by(study)
+collapse (last) price (count) userid (sum) transactionid (last) netsales (sum) volume (sum) investedpoints, by(study)
 
 rename price endprice
 label var endprice "Final price"
@@ -497,9 +500,9 @@ label var transactions "Number of transactions in the market"
 rename netsales endsales
 label var endsales "Final sales in the market"
 label var volume "Number of shares traded in the market"
+label var investedpoints "Number of points invested in the market"
 
 save "../temp/studysummary.dta", replace
-
 restore
 
 
@@ -579,6 +582,152 @@ label variable premin "Minutes spent on 1st survey"
 gen postmin = (postenddate - poststartdate)/(1000*60)
 label variable postmin "Minutes spent on 2st survey"
 order premin postmin, after(qkno)
+
+
+foreach var in country nationality core{
+	replace `var' = subinstr(strtrim(strlower(`var')),".","",.)
+}
+label def regions 0 "Unknown" 1 "Europe" 2 "Asia" 3 "North America" 4 "South America" 5 "Middle East" 6 "Africa" 7 "Oceania"
+
+gen int country_reg = 0
+label values country_reg regions
+replace country_reg = 7 if country=="australia"
+replace country_reg = 1 if country=="austria"
+replace country_reg = 3 if country=="canada"
+replace country_reg = 4 if country=="chile"
+replace country_reg = 2 if country=="china"
+replace country_reg = 4 if country=="colombia"
+replace country_reg = 1 if country=="denmark"
+replace country_reg = 1 if country=="england"
+replace country_reg = 1 if country=="finland"
+replace country_reg = 1 if country=="france"
+replace country_reg = 1 if country=="germany"
+replace country_reg = 2 if country=="india"
+replace country_reg = 5 if country=="israel"
+replace country_reg = 1 if country=="italy"
+replace country_reg = 1 if country=="netherlands"
+replace country_reg = 7 if country=="new zealand"
+replace country_reg = 1 if country=="spain"
+replace country_reg = 1 if country=="sweden"
+replace country_reg = 1 if country=="switzerland"
+replace country_reg = 2 if country=="taiwan"
+replace country_reg = 1 if country=="the netherlands"
+replace country_reg = 5 if country=="uae"
+replace country_reg = 1 if country=="uk"
+replace country_reg = 5 if country=="united arab emirates"
+replace country_reg = 1 if country=="united kingdom"
+replace country_reg = 3 if country=="united state"
+replace country_reg = 3 if country=="united states"
+replace country_reg = 3 if country=="united states of america"
+replace country_reg = 3 if country=="us"
+replace country_reg = 3 if country=="usa"
+
+gen int nationality_reg = 0
+label values nationality_reg regions
+replace nationality_reg = 3 if nationality=="americaxn"
+replace nationality_reg = 1 if nationality=="austria"
+replace nationality_reg = 1 if nationality=="austrian"
+replace nationality_reg = 2 if nationality=="azerbaijan"
+replace nationality_reg = 2 if nationality=="bangladesh"
+replace nationality_reg = 4 if nationality=="brazil"
+replace nationality_reg = 1 if nationality=="british"
+replace nationality_reg = 3 if nationality=="canada"
+replace nationality_reg = 3 if nationality=="canadian"
+replace nationality_reg = 4 if nationality=="chile"
+replace nationality_reg = 2 if nationality=="china"
+replace nationality_reg = 2 if nationality=="chinese"
+replace nationality_reg = 4 if nationality=="colombian"
+replace nationality_reg = 4 if nationality=="costa rica"
+replace nationality_reg = 1 if nationality=="croatia"
+replace nationality_reg = 1 if nationality=="croatian"
+replace nationality_reg = 1 if nationality=="dutch"
+replace nationality_reg = 1 if nationality=="england"
+replace nationality_reg = 1 if nationality=="finnish"
+replace nationality_reg = 1 if nationality=="french"
+replace nationality_reg = 1 if nationality=="german"
+replace nationality_reg = 1 if nationality=="germany"
+replace nationality_reg = 1 if nationality=="greek"
+replace nationality_reg = 1 if nationality=="hungarian"
+replace nationality_reg = 2 if nationality=="indian"
+replace nationality_reg = 5 if nationality=="iranian"
+replace nationality_reg = 5 if nationality=="israeli"
+replace nationality_reg = 1  if nationality=="italian"
+replace nationality_reg = 2 if nationality=="korean"
+replace nationality_reg = 1 if nationality=="lithuania"
+replace nationality_reg = 4 if nationality=="mexican"
+replace nationality_reg = 1 if nationality=="netherlands"
+replace nationality_reg = 7 if nationality=="new zealander/british"
+replace nationality_reg = 1 if nationality=="polish"
+replace nationality_reg = 1 if nationality=="russian"
+replace nationality_reg = 2 if nationality=="singapore"
+replace nationality_reg = 1 if nationality=="slovakia"
+replace nationality_reg = 6 if nationality=="south africa"
+replace nationality_reg = 2 if nationality=="south korean"
+replace nationality_reg = 1 if nationality=="sweden"
+replace nationality_reg = 1 if nationality=="swedish"
+replace nationality_reg = 1 if nationality=="swiss"
+replace nationality_reg = 1 if nationality=="switzerland"
+replace nationality_reg = 2 if nationality=="taiwan"
+replace nationality_reg = 1 if nationality=="uk"
+replace nationality_reg = 3 if nationality=="us"
+replace nationality_reg = 3 if nationality=="us citizen"
+replace nationality_reg = 3 if nationality=="usa"
+
+gen fields = ""
+label define fields 0 "Unknown"
+local i = 1
+local label ""
+foreach field in ///
+experimental ///
+political ///
+social ///
+decision ///
+behavioral ///
+macro ///
+public ///
+trade ///
+neuro ///
+law ///
+finance ///
+theory ///
+industrial ///
+land use ///
+mechanism ///
+micro ///
+urban ///
+development ///
+game theory ///
+institutions ///
+management ///
+international ///
+labor ///
+market design ///
+environmental ///
+gender ///
+health ///
+applied ///
+{
+	if strlen("`i'")==1{
+		replace fields = fields + "0`i'" if strpos(core, "`field'")!=0
+	}
+	else{
+		replace fields = fields + "`i'" if strpos(core, "`field'")!=0
+	}
+	label define fields `i' "`field'", add
+	local i = `i' + 1
+}
+
+gen temp = strlen(fields)
+qui sum temp
+local maxlen = r(max)/2
+forval i = 1/`maxlen'{
+	local start = `i'*2-1
+	gen core`i' = substr(fields, `start', 2)
+	destring core`i', replace
+	label values core`i' fields
+}
+drop temp
+
 
 
 /* Add study summary */

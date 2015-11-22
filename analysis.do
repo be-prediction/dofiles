@@ -78,6 +78,7 @@ restore
 	
 /// [9] Market participant statistics
 preserve
+	collapse active postfinished, by(userid)
 	count
 	count if active==1
 	count if active==1 & postfinished==1
@@ -246,5 +247,286 @@ preserve
 restore
 
 
+/// [24] Test if actual replication rate deviates from expected (based on power)
+preserve
+	collapse result powrep_plan, by(study)
+	qui sum powrep_plan
+	local powrep_planmean=r(mean)
+	prtest result == `powrep_planmean'
+restore
 
 
+/// [25] Mean number of original effect sizes within the 95% CI of the effect size estimate in the replication
+preserve
+	collapse eorig erepl erepu, by(study)
+	gen within = (erepl<=eorig & eorig<=erepu)
+	mean within
+restore
+
+/// [26] Mean number of original effect sizes within the 95% CI of the effect size estimate in the replication
+/// (inlcuding de CLippel et al.)
+preserve
+	collapse eorig erep erepl erepu, by(study)
+	gen within = (erepl<=eorig & eorig<=erepu)
+	replace within = 1 if erep>0 & erepl>eorig
+	mean within
+restore
+
+
+/// [27] Standardized effect size statistics
+preserve
+	collapse erep eorig erel, by(study)
+	sum erep eorig erel
+restore
+
+
+/// [28] Paired t-test of mean standardized effect size in replication and original
+preserve
+	collapse erep eorig, by(study)
+	ttest erep==eorig
+	
+	// Non parametric equivalent:
+	//signrank erep=eorig
+restore
+
+
+/// [29] Normalized standardized effect size statistics
+preserve
+	collapse ereprel erep eorig, by(study)
+	qui sum erep
+	local erepmean = r(mean)
+	qui sum eorig
+	local eorigmean = r(mean)
+	local avg = `erepmean'/`eorigmean'
+	display "erepmean/eorigmean = " `avg'
+	mean ereprel
+restore
+
+
+/// [30] Test if replication rate differs from market price
+preserve
+	collapse result endprice, by(study)
+	qui sum endprice
+	ttest endprice==result
+	
+	// Non-parametric equivalent:
+	*signrank result=endprice	
+restore
+
+
+/// [31] Test if replication rate differs from pre-market survey
+preserve
+	keep if active==1
+	collapse result preqrep, by(study)
+	ttest preqrep==result
+	
+	// Non-parametric equivalent:
+	*signrank preqrep=result
+restore
+
+
+/// [32] Meta-effect statistics
+preserve
+	collapse emeta emetal, by(study)
+	gen sigmeta = (0<emetal)
+	mean sigmeta
+restore
+
+
+/// [33] Difference in reproducibility between BERP and RPP across the six indicators
+preserve
+
+	/* Data gathering
+	----------------------------*/
+	mat drop _all
+
+	* Econ
+	keep if active==1
+	collapse result eorig erep emeta erepl erepu emetal emetau endprice preqrep, by(study)
+	
+	// Replicated with P<0.05 in original direction
+	sum result
+	mat def econ = (nullmat(econ) \ [r(mean), ., e(N)])
+	
+	// Original effect size within replication 95% CI
+	gen originrepci = (eorig>=erepl & eorig<=erepu)
+	sum originrepci
+	mat def econ = (nullmat(econ) \ [r(mean), ., e(N)])
+	
+	// Meta-analytic estimate significant in the original direction
+	gen metasig = (emetal>0)
+	sum metasig
+	mat def econ = (nullmat(econ) \ [r(mean), ., e(N)])
+	
+	// Replication effect-size (% of original effect size)
+	gen rele = erep/eorig
+	sum rele
+	mat def econ = (nullmat(econ) \ [r(mean), r(sd), e(N)])
+	
+	// Prediction markets beliefs about replication
+	sum endprice
+	mat def econ = (nullmat(econ) \ [r(mean), r(sd), e(N)])
+	
+	// Survey beliefs about replication
+	sum preqrep
+	mat def econ = (nullmat(econ) \ [r(mean), r(sd), e(N)])
+	
+	
+	* Psych replications
+	// Replicated with P<0.05 in original direction (from RPP-paper)
+	local mean = 35/97 
+	local obs = 97
+	mat def psych = (nullmat(psych) \ [`mean', ., `obs'])
+	
+	// Original effect size within replication 95% CI (from RPP-paper)
+	local mean = 45/95
+	local obs = 95
+	mat def psych = (nullmat(psych) \ [`mean', ., `obs'])
+	
+	// Meta-analytic estimate significant in the original direction (from RPP-paper)
+	local mean = 51/75
+	local obs = 75
+	mat def psych = (nullmat(psych) \ [`mean', ., `obs'])
+	
+	
+	
+	use "../use/rpp-data.dta", clear
+	*** !NOTE! ***
+	* The original effect size mean is slightly different
+	* from what's reported in the RPP paper, this is not an error
+	* as same thing is given with original R scripts and current data
+	
+	keep studynum t_rr t_ro t_pval_user t_pval_useo
+	
+	foreach var in t_rr t_ro t_pval_useo{
+		replace `var'="" if `var'=="NA"
+		destring `var', replace
+	}
+	
+	// Replication effect-size (% of original effect size)
+	gen rele = t_rr/t_ro
+	qui sum rele if studynum!=26 & studynum!=89 & studynum!=135
+	mat def psych = (nullmat(psych) \ [r(mean), r(sd), r(N)])
+	
+	* Psych market data
+	use "../use/rpp-market-data.dta", clear
+	keep study endprice preqrep
+	
+	// Prediction markets beliefs about replication
+	replace endprice=endprice/100
+	qui sum endprice
+	mat def psych = (nullmat(psych) \ [r(mean), r(sd), r(N)])
+	
+	// Survey beliefs about replication
+	replace preqrep=preqrep/100
+	qui sum preqrep
+	mat def psych = (nullmat(psych) \ [r(mean), r(sd), r(N)])
+	
+	* Combined
+	clear
+	svmat econ
+	rename econ1 e
+	rename econ2 eSD
+	rename econ3 eN
+	
+	svmat psych
+	rename psych1 p
+	rename psych2 pSD
+	rename psych3 pN
+	
+	gen diff = e -p
+	
+	
+	/* Tests
+	----------------------------*/
+	local sig = 0
+	forval n = 1/6{
+		local eN = eN[`n']
+		local e = e[`n']
+		local pN = pN[`n']
+		local p = p[`n']
+		if `n'==1{
+			display ""
+			display "Replicated with P<0.05 in original direction"
+		}
+		else if `n'==2{
+			display ""
+			display "Original effect size within replication 95% CI"
+		}
+		else if `n'==3{
+			display ""
+			display "Meta-analytic estimate significant in the original direction"
+		}
+		else if `n'==4{
+			display ""
+			display "Replication effect-size (% of original effect size)"
+		}
+		else if `n'==5{
+			display ""
+			display "Prediction markets beliefs about replication:"
+		}
+		else if `n'==6{
+			display ""
+			display "Survey beliefs about replication:"
+		}
+		// For the binary variables:
+		if `n'<=3{
+			prtesti `eN' `e' `pN' `p'
+			if  2*(1-normal(abs(r(z))))<=0.05{
+				local sig = `sig' + 1
+			}
+		}
+		// For the non-binary variables:
+		else{
+			local eSD = eSD[`n']
+			local pSD = pSD[`n']
+			ttesti `eN' `e' `eSD' `pN' `p' `pSD', unequal
+			if  r(p)<=0.05{
+				local sig = `sig' + 1
+			}
+		}
+	}
+	display "Number significant: " `sig'
+	
+	qui sum diff
+	display "Average difference across all 6 indicators: " r(mean)
+	
+	
+restore
+
+
+/// [34] Prediction market demographics
+preserve
+	collapse age gender yiacad position nationality_reg country_reg active, by(userid)
+	label values nationality_reg regions
+	label values country_reg regions
+	label values gender gender
+	label values position position2
+	keep if active==1
+	
+	tab position
+	mean yiacad
+	tab country_reg
+restore
+
+
+/// [35] Prediction market transaction details
+preserve
+	collapse traders transactions volume investedpoints, by(study)
+	sum volume, d
+	sum investedpoints, d
+restore
+
+
+/// [36] RPP pearson correlation between market price and replication outcome
+preserve
+	use "../use/rpp-market-data.dta", clear
+	pwcorr endprice resultrep, sig
+restore
+
+
+/// [37] RPP pearson correlation between pre-market survey and replication outcome
+preserve
+	use "../use/rpp-market-data.dta", clear
+	pwcorr preqrep resultrep, sig
+restore
