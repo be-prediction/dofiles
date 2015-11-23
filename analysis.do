@@ -29,34 +29,22 @@ preserve
 restore
 
 
-/// [4] Pearson correlation between market price and replication outcome
+/// [4] Correlation between market price and replication outcome
 preserve
 	collapse endprice result, by(study)
-	pwcorr endprice result, sig
+	spearman endprice result // Spearman
+	*pwcorr endprice result, sig // Pearson
 restore
 
 
-/// [5] Pearson’s Chi2 test of replication rates: RPP vs. BERP
-preserve
-	clear
-	local totobs = 97 + 18
-	set obs `totobs'
-	gen study =(_n>97)
-	label define studyname 0 "RPP" 1 "BERP"
-	label val study studyname
-	gen result = .
-	replace result = (_n <= 35) if study==0
-	replace result = (_n <= 108) if study==1
-	label define resultname 0 "Not replicated" 1 "Replicated"
-	label val result resultname
-	tabulate study result, chi2
-restore
+/// [5] -> Already included in [33]
 
 
-/// [6] Pearson correlation between original p-value and replication outcome
+/// [6] Correlation between original p-value and replication outcome
 preserve
 	collapse porig result, by(study)
-	pwcorr porig result, sig
+	spearman porig result // Spearman
+	*pwcorr porig result, sig // Pearson
 restore
 	
 	
@@ -69,10 +57,11 @@ preserve
 restore
 
 
-/// [8] Pearson correlation between original sample size and replication outcome
+/// [8] Correlation between original sample size and replication outcome
 preserve
 	collapse norig result, by(study)
-	pwcorr norig result, sig
+	spearman norig result // Spearman
+	*pwcorr norig result, sig // Pearson
 restore
 	
 	
@@ -93,19 +82,21 @@ preserve
 restore
 
 
-/// [11] Pearson correlation between pre-market survey and replication outcome
+/// [11] Correlation between pre-market survey and replication outcome
 preserve
 	keep if active==1
 	collapse preqrep result, by(study)
-	pwcorr preqrep result, sig
+	spearman preqrep result // Spearman
+	*pwcorr preqrep result, sig // Pearson
 restore
 
 
-/// [12] Pearson correlation between pre-market survey and final market prices
+/// [12] Correlation between pre-market survey and final market prices
 preserve
 	keep if active==1
 	collapse preqrep endprice, by(study)
-	pwcorr preqrep endprice, sig
+	spearman preqrep endprice // Spearman
+	*pwcorr preqrep endprice, sig // Pearson
 restore
 
 
@@ -115,7 +106,8 @@ preserve
 	collapse preqrep endprice result, by(study)
 	gen abs_price = abs(endprice-result)
 	gen abs_pre = abs(preqrep-result)
-	ttest abs_price==abs_pre
+	signrank abs_price=abs_pre // Wilcoxon matched-pairs signed-ranks test
+	*ttest abs_price==abs_pre // Paired t-test
 restore
 
 
@@ -128,20 +120,22 @@ preserve
 restore
 
 
-/// [15] Pearson correlation between pre- and post-market survey
+/// [15] Correlation between pre- and post-market survey
 preserve
 	bysort study: egen preqrep_mean = mean(preqrep) if active==1
 	bysort study: egen postqrep_mean = mean(postqrep) if postfinished==1
 	collapse preqrep_mean postqrep_mean, by(study)
-	pwcorr preqrep_mean postqrep_mean, sig
+	spearman preqrep_mean postqrep_mean // Spearman
+	*pwcorr preqrep_mean postqrep_mean, sig // Pearson
 restore
 
 
-/// [16] Pearson correlation between post-market survey and replication outcome
+/// [16] Correlation between post-market survey and replication outcome
 preserve
 	keep if postfinished==1
 	collapse postqrep result, by(study)
-	pwcorr  postqrep result, sig
+	spearman postqrep result // Spearman
+	*pwcorr  postqrep result, sig // Pearson
 restore
 
 
@@ -152,7 +146,8 @@ preserve
 	collapse preqrep_mean postqrep_mean result, by(study)
 	gen abs_pre = abs(preqrep_mean-result)
 	gen abs_post = abs(postqrep_mean-result)
-	ttest abs_pre==abs_post
+	signrank abs_pre=abs_post // Wilcoxon matched-pairs signed-ranks test
+	*ttest abs_pre==abs_post // Paired t-test
 restore
 
 
@@ -162,16 +157,18 @@ preserve
 	collapse postqrep endprice result, by(study)
 	gen abs_price = abs(endprice-result)
 	gen abs_post = abs(postqrep-result)
-	ttest abs_price==abs_post
+	signrank abs_price=abs_post // Wilcoxon matched-pairs signed-ranks test
+	*ttest abs_price==abs_post // Paired t-test
 restore
 
 
-/// [19] Pearson correlation between pre-market survey (traders) and pre-market survey (all)
+/// [19] Correlation between pre-market survey (traders) and pre-market survey (all)
 preserve
 	bysort study: egen preqrep_meanall = mean(preqrep)
 	bysort study: egen preqrep_meanactive = mean(preqrep) if active==1
 	collapse preqrep_meanactive preqrep_meanall, by(study)
-	pwcorr preqrep_meanactive preqrep_meanall, sig
+	spearman preqrep_meanactive preqrep_meanall // Spearman
+	*pwcorr preqrep_meanactive preqrep_meanall, sig // Pearson
 restore
 
 
@@ -183,10 +180,11 @@ preserve
 restore
 
 
-/// [21] Pearson correlation between pre-market survey (all) and replication outcome
+/// [21] Correlation between pre-market survey (all) and replication outcome
 preserve
 	collapse preqrep result, by(study)
-	pwcorr preqrep result, sig
+	spearman preqrep result // Spearman
+	*pwcorr preqrep result, sig // Pearson
 restore
 
 
@@ -194,7 +192,7 @@ restore
 use "../use/marketsurveysummary.dta", clear
 collapse endprice, by(study)
 
-/* Pearson correlation estimation */
+/* Correlation estimation */
 set seed 1392393485
 local num_iterations = 10000
 local tot_os = 0
@@ -206,10 +204,11 @@ forval i = 1/`num_iterations'{
 	preserve
 	qui gen rand = uniform()
 	qui gen result = (endprice >= rand)
-	qui pwcorr endprice result
+	qui spearman endprice result // Spearman
+	*qui pwcorr endprice result // Pearson
 	local est = r(rho)
 	if `est'!=.{
-		local t = `est'/sqrt((1-`est'^2)/16)
+		local t = `est'/sqrt((1-(`est')^2)/16)
 		local pos = 1-t(16, `t') // One tailed t-test of positive correlation
 		local pts = 2*(1-t(16, abs(`t'))) // Two tailed t-test of difference from 0
 		if `pos'<=0.025{
@@ -240,10 +239,11 @@ display "Mean: " `mean'
 use "../use/marketsurveysummary.dta", clear
 
 
-/// [23] Pearson correlation between original sample size and replication outcome
+/// [23] Correlation between original sample size and replication outcome
 preserve
 	collapse norig result, by(study)
-	pwcorr norig result, sig
+	spearman norig result // Spearman
+	*pwcorr norig result, sig // Pearson
 restore
 
 
@@ -280,13 +280,11 @@ preserve
 restore
 
 
-/// [28] Paired t-test of mean standardized effect size in replication and original
+/// [28] Test of mean standardized effect size in replication and original
 preserve
 	collapse erep eorig, by(study)
-	ttest erep==eorig
-	
-	// Non parametric equivalent:
-	//signrank erep=eorig
+	*ttest erep==eorig // Paired t-test 
+	signrank erep=eorig //  Wilcoxon matched-pairs signed-ranks test
 restore
 
 
@@ -307,10 +305,8 @@ restore
 preserve
 	collapse result endprice, by(study)
 	qui sum endprice
-	ttest endprice==result
-	
-	// Non-parametric equivalent:
-	*signrank result=endprice	
+	signrank endprice=result //  Wilcoxon matched-pairs signed-ranks test	
+	*ttest endprice==result // Paired t-test 
 restore
 
 
@@ -318,10 +314,8 @@ restore
 preserve
 	keep if active==1
 	collapse result preqrep, by(study)
-	ttest preqrep==result
-	
-	// Non-parametric equivalent:
-	*signrank preqrep=result
+	signrank preqrep=result //  Wilcoxon matched-pairs signed-ranks test	
+	*ttest preqrep==result // Paired t-test
 restore
 
 
@@ -334,165 +328,217 @@ restore
 
 
 /// [33] Difference in reproducibility between BERP and RPP across the six indicators
-preserve
-
-	/* Data gathering
-	----------------------------*/
+*** ! NOTE ***
+* The Chi-square test is equivalent to
+* a test of proportions in the case of
+* two samples and two binary variables.
+* For programming convenience, we simply
+* obtain the Chi-square statistic by
+* squaring the z-statistics form a test
+* of proportions.
 	mat drop _all
+	
+	mat def econ = [.,.,.\.,.,.\.,.,.\.,.,.\.,.,.\.,.,.]
+	mat def psych = econ
+	
+	/// [33a] Replicated with P<0.05 in original direction
+	preserve
+		keep if active==1
+		collapse result, by(study)
+		sum result
+		local e = r(mean)
+		local eN = r(N)
+		mat def econ[1,1]=`e'
+		mat def econ[1,3]=`eN'
+		
+		local p = 35/97 
+		local pN = 97
+		mat def psych[1,1]=`p'
+		mat def psych[1,3]=`pN'
+		
+		prtesti `eN' `e' `pN' `p'
+		display "Chi2=" r(z)^2
+	restore
+	
+	/// [33b] Original effect size within replication 95% CI
+	preserve
+		keep if active==1
+		collapse eorig erepl erepu, by(study)
+		gen originrepci = (eorig>=erepl & eorig<=erepu)
+		sum originrepci
+		local e = r(mean)
+		local eN = r(N)
+		mat def econ[2,1]=`e'
+		mat def econ[2,3]=`eN'
+		
+		local p = 45/95
+		local pN = 95
+		mat def psych[2,1]=`p'
+		mat def psych[2,3]=`pN'
+		
+		prtesti `eN' `e' `pN' `p'
+		display "Chi2=" r(z)^2
+	restore
+	
+	/// [33c] Meta-analytic estimate significant in the original direction
+	preserve
+		keep if active==1
+		collapse emetal, by(study)
+		gen metasig = (emetal>0)
+		sum metasig
+		local e = r(mean)
+		local eN = r(N)
+		mat def econ[3,1]=`e'
+		mat def econ[3,3]=`eN'
+		
+		local p = 51/75
+		local pN  = 75
+		mat def psych[3,1]=`p'
+		mat def psych[3,3]=`pN'
+		
+		prtesti `eN' `e' `pN' `p'
+		display "Chi2=" r(z)^2
+	restore
+	
+	/// [33d] Replication effect-size (% of original effect size)
+	preserve
+		keep if active==1
+		collapse erep eorig, by(study)
+		gen rele = erep/eorig
+		sum rele
+		local e = r(mean)
+		local eN = r(N)
+		local eSD = r(sd)
+		mat def econ[4,1]=`e'
+		mat def econ[4,2]=`eSD'
+		mat def econ[4,3]=`eN'
+		
+		gen project = 1
+		mkmat rele project, matrix(rele_econ)
+		
+		use "../use/rpp-data.dta", clear
+		*** !NOTE! ***
+		* The original effect size mean is slightly different
+		* from what's reported in the RPP paper, this is not an error
+		* as same thing is given with original R scripts and current data
+		
+		keep studynum t_rr t_ro t_pval_user t_pval_useo
+		foreach var in t_rr t_ro t_pval_useo{
+			replace `var'="" if `var'=="NA"
+			destring `var', replace
+		}
+		gen rele = t_rr/t_ro
+		keep if studynum!=26 & studynum!=89 & studynum!=135 & rele!=.
+		sum rele 
+		local p = r(mean)
+		local pN = r(N)
+		local pSD = r(sd)
+		mat def psych[4,1]=`p'
+		mat def psych[4,2]=`pSD'
+		mat def psych[4,3]=`pN'
+		
+		gen project = 2
+		mkmat rele project, matrix(rele_psych)
+		
+		mat def compare = [rele_econ \ rele_psych]
+		
+		clear
+		svmat compare, names(col)
+		
+		ranksum rele, by(project) // Two-sample Wilcoxon rank-sum (Mann-Whitney) test
+		*ttesti `eN' `e' `eSD' `pN' `p' `pSD', unequal // Two-sample t test with unequal variances
+	restore
+	
+	/// [33e] Prediction markets beliefs about replication
+	preserve
+		keep if active==1
+		collapse endprice, by(study)
+		sum endprice
+		local e = r(mean)
+		local eN = r(N)
+		local eSD = r(sd)
+		mat def econ[5,1]=`e'
+		mat def econ[5,2]=`eSD'
+		mat def econ[5,3]=`eN'
+		
+		gen project = 1
+		mkmat endprice project, matrix(endprice_econ)
 
-	* Econ
-	keep if active==1
-	collapse result eorig erep emeta erepl erepu emetal emetau endprice preqrep, by(study)
+		use "../use/rpp-market-data.dta", clear
+		keep endprice
+		keep if endprice!=.
+		replace endprice=endprice/100
+		sum endprice
+		local p = r(mean)
+		local pN = r(N)
+		local pSD = r(sd)
+		mat def psych[5,1]=`p'
+		mat def psych[5,2]=`pSD'
+		mat def psych[5,3]=`pN'
+		
+		gen project = 2
+		mkmat endprice project, matrix(endprice_psych)
 	
-	// Replicated with P<0.05 in original direction
-	sum result
-	mat def econ = (nullmat(econ) \ [r(mean), ., e(N)])
-	
-	// Original effect size within replication 95% CI
-	gen originrepci = (eorig>=erepl & eorig<=erepu)
-	sum originrepci
-	mat def econ = (nullmat(econ) \ [r(mean), ., e(N)])
-	
-	// Meta-analytic estimate significant in the original direction
-	gen metasig = (emetal>0)
-	sum metasig
-	mat def econ = (nullmat(econ) \ [r(mean), ., e(N)])
-	
-	// Replication effect-size (% of original effect size)
-	gen rele = erep/eorig
-	sum rele
-	mat def econ = (nullmat(econ) \ [r(mean), r(sd), e(N)])
-	
-	// Prediction markets beliefs about replication
-	sum endprice
-	mat def econ = (nullmat(econ) \ [r(mean), r(sd), e(N)])
-	
-	// Survey beliefs about replication
-	sum preqrep
-	mat def econ = (nullmat(econ) \ [r(mean), r(sd), e(N)])
+		mat def compare = [endprice_econ \ endprice_psych]
+		
+		clear
+		svmat compare, names(col)
+		
+		ranksum endprice, by(project) // Two-sample Wilcoxon rank-sum (Mann-Whitney) test
+		*ttesti `eN' `e' `eSD' `pN' `p' `pSD', unequal // Two-sample t test with unequal variances
+	restore
 	
 	
-	* Psych replications
-	// Replicated with P<0.05 in original direction (from RPP-paper)
-	local mean = 35/97 
-	local obs = 97
-	mat def psych = (nullmat(psych) \ [`mean', ., `obs'])
+	/// [33f] Survey beliefs about replication
+	preserve
+		keep if active==1
+		collapse preqrep, by(study)
+		sum preqrep
+		local e = r(mean)
+		local eN = r(N)
+		local eSD = r(sd)
+		mat def econ[6,1]=`e'
+		mat def econ[6,2]=`eSD'
+		mat def econ[6,3]=`eN'
+		
+		gen project = 1
+		mkmat preqrep project, matrix(preqrep_econ)
+
+		use "../use/rpp-market-data.dta", clear
+		keep preqrep
+		keep if preqrep!=.
+		replace preqrep=preqrep/100
+		sum preqrep
+		local p = r(mean)
+		local pN = r(N)
+		local pSD = r(sd)
+		mat def psych[6,1]=`p'
+		mat def psych[6,2]=`pSD'
+		mat def psych[6,3]=`pN'
+		
+		gen project = 2
+		mkmat preqrep project, matrix(preqrep_psych)
 	
-	// Original effect size within replication 95% CI (from RPP-paper)
-	local mean = 45/95
-	local obs = 95
-	mat def psych = (nullmat(psych) \ [`mean', ., `obs'])
-	
-	// Meta-analytic estimate significant in the original direction (from RPP-paper)
-	local mean = 51/75
-	local obs = 75
-	mat def psych = (nullmat(psych) \ [`mean', ., `obs'])
-	
-	
-	
-	use "../use/rpp-data.dta", clear
-	*** !NOTE! ***
-	* The original effect size mean is slightly different
-	* from what's reported in the RPP paper, this is not an error
-	* as same thing is given with original R scripts and current data
-	
-	keep studynum t_rr t_ro t_pval_user t_pval_useo
-	
-	foreach var in t_rr t_ro t_pval_useo{
-		replace `var'="" if `var'=="NA"
-		destring `var', replace
-	}
-	
-	// Replication effect-size (% of original effect size)
-	gen rele = t_rr/t_ro
-	qui sum rele if studynum!=26 & studynum!=89 & studynum!=135
-	mat def psych = (nullmat(psych) \ [r(mean), r(sd), r(N)])
-	
-	* Psych market data
-	use "../use/rpp-market-data.dta", clear
-	keep study endprice preqrep
-	
-	// Prediction markets beliefs about replication
-	replace endprice=endprice/100
-	qui sum endprice
-	mat def psych = (nullmat(psych) \ [r(mean), r(sd), r(N)])
-	
-	// Survey beliefs about replication
-	replace preqrep=preqrep/100
-	qui sum preqrep
-	mat def psych = (nullmat(psych) \ [r(mean), r(sd), r(N)])
-	
-	* Combined
-	clear
-	svmat econ
-	rename econ1 e
-	rename econ2 eSD
-	rename econ3 eN
-	
-	svmat psych
-	rename psych1 p
-	rename psych2 pSD
-	rename psych3 pN
-	
-	gen diff = e -p
+		mat def compare = [preqrep_econ \ preqrep_psych]
+		
+		clear
+		svmat compare, names(col)
+		
+		ranksum preqrep, by(project) // Two-sample Wilcoxon rank-sum (Mann-Whitney) test
+		*ttesti `eN' `e' `eSD' `pN' `p' `pSD', unequal // Two-sample t test with unequal variances
+	restore
 	
 	
-	/* Tests
-	----------------------------*/
-	local sig = 0
-	forval n = 1/6{
-		local eN = eN[`n']
-		local e = e[`n']
-		local pN = pN[`n']
-		local p = p[`n']
-		if `n'==1{
-			display ""
-			display "Replicated with P<0.05 in original direction"
-		}
-		else if `n'==2{
-			display ""
-			display "Original effect size within replication 95% CI"
-		}
-		else if `n'==3{
-			display ""
-			display "Meta-analytic estimate significant in the original direction"
-		}
-		else if `n'==4{
-			display ""
-			display "Replication effect-size (% of original effect size)"
-		}
-		else if `n'==5{
-			display ""
-			display "Prediction markets beliefs about replication:"
-		}
-		else if `n'==6{
-			display ""
-			display "Survey beliefs about replication:"
-		}
-		// For the binary variables:
-		if `n'<=3{
-			prtesti `eN' `e' `pN' `p'
-			if  2*(1-normal(abs(r(z))))<=0.05{
-				local sig = `sig' + 1
-			}
-		}
-		// For the non-binary variables:
-		else{
-			local eSD = eSD[`n']
-			local pSD = pSD[`n']
-			ttesti `eN' `e' `eSD' `pN' `p' `pSD', unequal
-			if  r(p)<=0.05{
-				local sig = `sig' + 1
-			}
-		}
-	}
-	display "Number significant: " `sig'
-	
-	qui sum diff
-	display "Average difference across all 6 indicators: " r(mean)
+	/// [33+] Average difference across all 6 indicators
+	preserve
+		clear
+		svmat econ
+		svmat psych
+		gen diff=econ1-psych1
+		sum diff
+	restore
 	
 	
-restore
 
 
 /// [34] Prediction market demographics
@@ -518,15 +564,44 @@ preserve
 restore
 
 
-/// [36] RPP pearson correlation between market price and replication outcome
+/// [36] RPP correlation between market price and replication outcome
 preserve
 	use "../use/rpp-market-data.dta", clear
-	pwcorr endprice resultrep, sig
+	spearman endprice resultrep // Spearman
+	*pwcorr endprice resultrep, sig // Pearson
 restore
 
 
-/// [37] RPP pearson correlation between pre-market survey and replication outcome
+/// [37] RPP correlation between pre-market survey and replication outcome
 preserve
 	use "../use/rpp-market-data.dta", clear
-	pwcorr preqrep resultrep, sig
+	spearman preqrep resultrep // Spearman
+	*pwcorr preqrep resultrep, sig // Pearson
+restore
+
+
+/// [38] Correlation between original and replication standardized effect sizes
+preserve
+	collapse eorig erep, by(study)
+	spearman eorig erep // Spearman
+	*pwcorr eorig erep, sig // Pearson
+restore
+
+
+/// [39] Final holdings statistics (bulls/bears)
+preserve
+	keep if active==1
+	collapse finalholdings, by(study userid)
+	drop if finalholdings==0 // Only keep markets for which user has holdings
+	gen int holdingtype=.
+	replace holdingtype=1 if finalholdings>0
+	replace holdingtype=-1 if finalholdings<0
+	
+	collapse (sum) holdingtype (count) finalholdings, by(userid)
+	qui sum if holdingtype==-finalholdings
+	local bears=r(N)
+	qui sum if holdingtype==finalholdings
+	local bulls=r(N)
+	display "Bears: " `bears'
+	display "Bulls: " `bulls'
 restore

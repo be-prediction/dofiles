@@ -202,12 +202,14 @@ restore
 
 // Table S3. Prediction market results for the 18 replication studies
 preserve
-	collapse result endprice poworig powrep_plan p0 p1 p2, by(study)
+	collapse result endprice poworig powrep_plan powrep_act p0 p1 p2, by(study)
 	gen ref = study
 	order ref, after(study)
 	label def result 1 "Yes" 0 "No"
 	label values result result
 	rename powrep_plan powrepplan
+	rename powrep_act powrepact
+	replace powrepact=. if powrepact==powrepplan
 	outsheet using "../tables/tab-s3.csv", replace noquote comma
 restore
 
@@ -292,21 +294,52 @@ preserve
 
 	outsheet using "../tables/tab-s6.csv", replace noquote comma
 restore
+
+// Fig S1. Comparison of original and replication effect sizes
+preserve
+	collapse result eorig erep, by(study)
+	outsheet using "../graphs/fig-s1.csv", replace noquote comma
+restore
+
+// Fig S3. Final positions per participant and market.
+preserve
+	keep if active==1
+	collapse finalholdings, by(study userid)
+	gen int holdingtype=.
+	replace holdingtype=1 if finalholdings>0
+	replace holdingtype=-1 if finalholdings<0
+	replace holdingtype=0 if finalholdings==0
+	sort userid study
 	
-// Fig S3. Comparison of survey responses and prediction market prices.
+	local i = 1
+	forval j=-1(1)1{
+		gen temp = (holdingtype==`j')
+		bysort userid: egen type`i' = total(temp)
+		drop temp
+		local i=`i'+1
+		
+	}
+	gsort type2 -type3 type1 userid	
+	
+	gen int tempid = .
+	forval id = 1/97{
+		replace tempid = `id' if (`id'-1)*18<_n & _n<=`id'*18
+	}
+	
+	keep study tempid holdingtype
+	outsheet using "../graphs/fig-s3.csv", replace noquote comma nolab
+restore
+	
+// Fig S4. Comparison of survey responses and prediction market prices.
 preserve
-keep if active==1
-collapse result endprice preqrep, by(study)
-reg preqrep endprice
-mat def b=e(b)'
-mat colnames b=linearfit
-svmat b, names(col)
-outsheet using "../graphs/fig-s3.csv", replace noquote comma
+	keep if active==1
+	collapse result endprice preqrep, by(study)
+	reg preqrep endprice
+	mat def b=e(b)'
+	mat colnames b=linearfit
+	svmat b, names(col)
+	outsheet using "../graphs/fig-s4.csv", replace noquote comma
 restore
 
 
-// Fig S4. Comparison of original and replication effect sizes
-preserve
-collapse result eorig erep, by(study)
-outsheet using "../graphs/fig-s4.csv", replace noquote comma
-restore
+

@@ -102,7 +102,7 @@ label define study 1 "Abeler et al. (AER 2011)" ///
 15 "Kirchler et al (AER 2012)" ///
 16 "Kogan et al. (AER 2011)" ///
 17 "Kuziemko et al. (QJE 2014)" ///
-18 "Marzilli Ericson and Fuster (QJE 2011)"
+18 "Ericson and Fuster (QJE 2011)"
 
 label values study study
 
@@ -383,7 +383,7 @@ label define study 1 "Abeler et al. (AER 2011)" ///
 15 "Kirchler et al (AER 2012)" ///
 16 "Kogan et al. (AER 2011)" ///
 17 "Kuziemko et al. (QJE 2014)" ///
-18 "Marzilli Ericson and Fuster (QJE 2011)"
+18 "Ericson and Fuster (QJE 2011)"
 
 label values study study
 order userid study, after(market)
