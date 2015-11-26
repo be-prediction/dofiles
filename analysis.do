@@ -33,7 +33,7 @@ restore
 preserve
 	collapse endprice result, by(study)
 	spearman endprice result // Spearman
-	*pwcorr endprice result, sig // Pearson
+	pwcorr endprice result, sig // Pearson
 restore
 
 
@@ -87,7 +87,7 @@ preserve
 	keep if active==1
 	collapse preqrep result, by(study)
 	spearman preqrep result // Spearman
-	*pwcorr preqrep result, sig // Pearson
+	pwcorr preqrep result, sig // Pearson
 restore
 
 
@@ -567,16 +567,16 @@ restore
 /// [36] RPP correlation between market price and replication outcome
 preserve
 	use "../use/rpp-market-data.dta", clear
-	spearman endprice resultrep // Spearman
-	*pwcorr endprice resultrep, sig // Pearson
+	*spearman endprice resultrep // Spearman
+	pwcorr endprice resultrep, sig // Pearson
 restore
 
 
 /// [37] RPP correlation between pre-market survey and replication outcome
 preserve
 	use "../use/rpp-market-data.dta", clear
-	spearman preqrep resultrep // Spearman
-	*pwcorr preqrep resultrep, sig // Pearson
+	*spearman preqrep resultrep // Spearman
+	pwcorr preqrep resultrep, sig // Pearson
 restore
 
 

@@ -754,14 +754,26 @@ order finalholdings finalcredit increasecount decreasecount meantokens investmen
 merge m:1 study using "../use/studydetails.dta", keep(match master)
 drop _merge
 
+order ref, after(study)
+
 
 /* Add priors */
-gen p1 = (endprice-a1)/(powrep_plan-a1) // Since all replicated findings are positive, use planned power as that's what traders knew
+*** !NOTE ***
+* If the market price is above the planned power,
+* a fake price is set to 0.01 below the planned power.
+
+gen tempprice = endprice
+replace tempprice = powrep_plan - 0.01 if powrep_plan<tempprice
+gen p1 = (tempprice-a1)/(powrep_plan-a1) // Since all replicated findings are positive, use planned power as that's what traders knew
 gen p0 = p1*a0/(p1*a0+(1-p1)*poworig) // Since all replicated findings are positive
 gen p2 = .
-replace p2 = ((endprice-a1)*powrep_plan)/(endprice*(powrep_plan-a1)) if result==1
-replace p2 = ((endprice-a1)*(1-powrep_plan))/((1-endprice)*(powrep_plan-a1)) if result==0
+replace p2 = ((tempprice-a1)*powrep_plan)/(tempprice*(powrep_plan-a1)) if result==1
+replace p2 = ((tempprice-a1)*(1-powrep_plan))/((1-tempprice)*(powrep_plan-a1)) if result==0
 order p1 p2, after(p0)
+
+label var p0 "p0 based on adjusted market prices"
+label var p1 "p1 based on adjusted market prices"
+label var p2 "p2 based on adjusted market prices"
 
 
 /* Create relative effect sizes */

@@ -9,13 +9,12 @@ use "../use/marketsurveysummary.dta", clear
 
 // Table 1. Replication results
 preserve
-	collapse eorig erep erel porig prep result, by(study)
+	collapse ref eorig erep erel porig prep result, by(study)
+	sort ref
 	foreach var in porig prep{
 		replace `var' = 0.00001 if `var'<=0.00001
 		format `var' %12.6f
 	}
-	gen ref = study
-	order ref, after(study)
 	label def result 1 "Yes" 0 "No"
 	label values result result
 	outsheet using "../tables/tab-1.csv", replace noquote comma	
@@ -25,28 +24,43 @@ restore
 // Fig 1. Replication results 95% confidence intervals of normalized standardized replication
 // effectsizes (correlation coefficient r).
 preserve 
-	collapse ereprel ereprell ereprelu, by(study)
-	drop if ereprel==.
-	sort ereprel
-	gen order = 19-study
+	collapse ref ereprel ereprell ereprelu, by(study)
+	sort ref
+	gen order = 19-_n
 	gen errorl = abs(ereprell-ereprel)
 	gen erroru = abs(ereprel-ereprelu)
-	drop ereprel?
-	outsheet using "../graphs/fig-1.csv", replace noquote comma
+	// Update labels:
+	forval s=1/18{
+		local name: label study `s'
+		qui sum ref if study==`s'
+		local ref = r(mean)
+		local newname = subinstr(subinstr("`name'", " (", ", ", .), ")", "", .) + " (`ref')"
+		label define study `s' "`newname'", modify
+	}
+	drop ereprel? ref
+	outsheet using "../graphs/fig-1.csv", replace noquote delimiter(";")
 restore
 
 
 // Fig 2. Normalized meta-analytic estimates of effect sizes combining the original and replication studies. 
 // 95% confidence intervals of standardized effect sizes (correlation coefficient r).
 preserve 
-	collapse emetarel emetarell emetarelu, by(study)
+	collapse ref emetarel emetarell emetarelu, by(study)
 	drop if emetarel==.
-	sort emetarel
-	gen order = 19-study
+	sort ref
+	gen order = 19-_n
 	gen errorl = abs(emetarell-emetarel)
 	gen erroru = abs(emetarel-emetarelu)
-	drop emetarel?
-	outsheet using "../graphs/fig-2.csv", replace noquote comma
+	// Update labels:
+	forval s=1/18{
+		local name: label study `s'
+		qui sum ref if study==`s'
+		local ref = r(mean)
+		local newname = subinstr(subinstr("`name'", " (", ", ", .), ")", "", .) + " (`ref')"
+		label define study `s' "`newname'", modify
+	}
+	drop emetarel? ref
+	outsheet using "../graphs/fig-2.csv", replace noquote delimiter(";")
 restore
 
 
@@ -188,9 +202,8 @@ restore
 
 // Table S1. Prediction market results for the 18 replication studies
 preserve
-	collapse porig eorig prep erep result erel, by(study)
-	gen ref = study
-	order ref, after(study)
+	collapse ref porig eorig prep erep result erel erel_ns, by(study)
+	sort ref
 	label def result 1 "Yes" 0 "No"
 	label values result result
 	foreach var in porig prep{
@@ -202,9 +215,8 @@ restore
 
 // Table S3. Prediction market results for the 18 replication studies
 preserve
-	collapse result endprice poworig powrep_plan powrep_act p0 p1 p2, by(study)
-	gen ref = study
-	order ref, after(study)
+	collapse  ref result endprice poworig powrep_plan powrep_act p0 p1 p2, by(study)
+	sort ref
 	label def result 1 "Yes" 0 "No"
 	label values result result
 	rename powrep_plan powrepplan
@@ -220,9 +232,8 @@ preserve
 
 	keep if active==1
 
-	collapse result endprice preqrepmeanactive preqrepmeanall postqrep, by(study)
-	gen ref = study
-	order ref, after(study)
+	collapse ref result endprice preqrepmeanactive preqrepmeanall postqrep, by(study)
+	sort ref
 	label def result 1 "Yes" 0 "No"
 	label values result result
 	outsheet using "../tables/tab-s4.csv", replace noquote comma
@@ -231,9 +242,8 @@ restore
 // Table S5. Additional prediciton market results for the 18 replication studies.
 preserve
 	keep if active==1
-	collapse result endprice volume investedpoints traders transactions, by(study)
-	gen ref = study
-	order ref, after(study)
+	collapse ref result endprice volume investedpoints traders transactions, by(study)
+	sort ref
 	label def result 1 "Yes" 0 "No"
 	label values result result
 	outsheet using "../tables/tab-s5.csv", replace noquote comma
@@ -304,7 +314,7 @@ restore
 // Fig S3. Final positions per participant and market.
 preserve
 	keep if active==1
-	collapse finalholdings, by(study userid)
+	collapse ref finalholdings, by(study userid)
 	gen int holdingtype=.
 	replace holdingtype=1 if finalholdings>0
 	replace holdingtype=-1 if finalholdings<0
@@ -326,7 +336,7 @@ preserve
 		replace tempid = `id' if (`id'-1)*18<_n & _n<=`id'*18
 	}
 	
-	keep study tempid holdingtype
+	keep ref tempid holdingtype
 	outsheet using "../graphs/fig-s3.csv", replace noquote comma nolab
 restore
 	
@@ -341,5 +351,30 @@ preserve
 	outsheet using "../graphs/fig-s4.csv", replace noquote comma
 restore
 
-
-
+// Fig S5. Probability of a hypothesis being "true" at three different stages of testing
+preserve
+	local j=0
+	forval i=0/3{
+		local if
+		if `i'==2{
+			local if "if result==0"
+		}
+		else if `i'==3{
+			local if "if result==1"
+			local j = 2
+		}
+		egen lw`i' = min(p`j') `if'
+		egen uw`i' = max(p`j') `if'
+		egen med`i' = pctile(p`j') `if', p(50)
+		egen lq`i' = pctile(p`j') `if', p(25)
+		egen uq`i' = pctile(p`j') `if', p(75)
+		local j = `j' + 1
+	}
+	
+	collapse ?w? med? ?q?
+	
+	gen temp = _n
+	reshape long lw uw med lq uq, j(prior) i(temp)
+	drop temp
+	outsheet using "../graphs/fig-s5.csv", replace noquote comma
+restore
