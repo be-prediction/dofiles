@@ -66,76 +66,263 @@ restore
 
 // Fig 3. A comparison of different reproducibility indicators between experimental economics
 // and psychological sciences (the Reproducibility Project Psychology)
-preserve
+use "../use/marketsurveysummary.dta", clear
 	
-	* Econ
-	keep if active==1
-	collapse result eorig erep emeta erepl erepu emetal emetau endprice preqrep, by(study)
+	mat drop _all
+
+	mat def econ = [.,.,.\.,.,.\.,.,.\.,.,.\.,.,.\.,.,.]
+	mat def psych = econ
 	
-	sum result // Replicated with P<0.05 in original direction
-	gen originrepci = (eorig>=erepl & eorig<=erepu) // Original effect size within replication 95% CI
-	gen metasig = (emetal>0) // Meta-analytic estimate significant in the original direction
-	gen rele = erep/eorig // Replication effect-size (% of original effect size)
-	sum endprice // Prediction markets beliefs about replication
-	sum preqrep // Survey beliefs about replication
+	mat def pvalues = [.\.\.\.\.\.]
 	
-	collapse result originrepci metasig rele endprice preqrep
+	/// [33a] Replicated with P<0.05 in original direction
+	preserve
+		keep if active==1
+		collapse result, by(study)
+		sum result
+
+		local e = r(mean)
+		local eN = r(N)
+		local eSE = sqrt((`e'*(1-`e'))/`eN')
+		 
+		mat def econ[1,1]=`e'
+		mat def econ[1,2]=`eSE'
+		mat def econ[1,3]=`eN'
+		
+		local p = 35/97 
+		local pN = 97
+		local pSE = sqrt((`p'*(1-`p'))/`pN')
+		mat def psych[1,1]=`p'
+		mat def psych[1,2]=`pSE'
+		mat def psych[1,3]=`pN'
+		
+		prtesti `eN' `e' `pN' `p'
+		mat def pvalues[1,1]=2*(1-normal(abs(r(z))))
+	restore
 	
-	mkmat *, matrix(summary)
-	mat def summary = [summary \ [.,.,.,.,.,.]]'
+	/// [33b] Original effect size within replication 95% CI
+	preserve
+		keep if active==1
+		collapse eorig erepl erepu, by(study)
+		gen originrepci = (eorig>=erepl & eorig<=erepu)
+		sum originrepci
+		local e = r(mean)
+		local eN = r(N)
+		local eSE = sqrt((`e'*(1-`e'))/`eN')
+		mat def econ[2,1]=`e'
+		mat def econ[2,2]=`eSE'
+		mat def econ[2,3]=`eN'
+		
+		local p = 45/95
+		local pN = 95
+		local pSE = sqrt((`p'*(1-`p'))/`pN')
+		mat def psych[2,1]=`p'
+		mat def psych[2,2]=`pSE'
+		mat def psych[2,3]=`pN'
+		
+		prtesti `eN' `e' `pN' `p'
+		mat def pvalues[2,1]=2*(1-normal(abs(r(z))))
+	restore
 	
-	* Psych
-	use "../use/rpp-market-data.dta", clear
+	/// [33c] Meta-analytic estimate significant in the original direction
+	preserve
+		keep if active==1
+		collapse emetal, by(study)
+		gen metasig = (emetal>0)
+		sum metasig
+		local e = r(mean)
+		local eN = r(N)
+		local eSE = sqrt((`e'*(1-`e'))/`eN')
+		mat def econ[3,1]=`e'
+		mat def econ[3,2]=`eSE'
+		mat def econ[3,3]=`eN'
+		
+		local p = 51/75
+		local pN  = 75
+		local pSE = sqrt((`p'*(1-`p'))/`pN')
+		mat def psych[3,1]=`p'
+		mat def psych[3,2]=`pSE'
+		mat def psych[3,3]=`pN'
+		
+		prtesti `eN' `e' `pN' `p'
+		mat def pvalues[3,1]=2*(1-normal(abs(r(z))))
+	restore
 	
-	collapse endprice preqrep
-	replace endprice=endprice/100 // Prediction markets beliefs about replication
-	qui sum endprice
-	mat def summary[rownumb(summary,"endprice"), 2] = r(mean)
+	/// [33d] Replication effect-size (% of original effect size)
+	preserve
+		keep if active==1
+		collapse erep eorig, by(study)
+		gen rele = erep/eorig
+		sum rele
+		local e = r(mean)
+		local eN = r(N)
+		local eSE = r(sd)/sqrt(`eN')
+		mat def econ[4,1]=`e'
+		mat def econ[4,2]=`eSE'
+		mat def econ[4,3]=`eN'
+		
+		mean rele 
+		
+		gen project = 1
+		mkmat rele project, matrix(rele_econ)
+		
+		use "../use/rpp-data.dta", clear
+		*** !NOTE! ***
+		* The original effect size mean is slightly different
+		* from what's reported in the RPP paper, this is not an error
+		* as same thing is given with original R scripts and current data
+		
+		keep studynum t_rr t_ro t_pval_user t_pval_useo
+		foreach var in t_rr t_ro t_pval_useo{
+			replace `var'="" if `var'=="NA"
+			destring `var', replace
+		}
+		gen rele = t_rr/t_ro
+		keep if studynum!=26 & studynum!=89 & studynum!=135 & rele!=.
+		sum rele 
+		local p = r(mean)
+		local pN = r(N)
+		local pSE = r(sd)/sqrt(`pN')
+		mat def psych[4,1]=`p'
+		mat def psych[4,2]=`pSE'
+		mat def psych[4,3]=`pN'
+		
+		gen project = 2
+		mkmat rele project, matrix(rele_psych)
+		
+		mat def compare = [rele_econ \ rele_psych]
+		
+		clear
+		svmat compare, names(col)
+		
+		ranksum rele, by(project) // Two-sample Wilcoxon rank-sum (Mann-Whitney) test
+		mat def pvalues[4,1]=2*(1-normal(abs(r(z))))
+	restore
 	
-	replace preqrep=preqrep/100 // Survey beliefs about replication
-	qui sum preqrep
-	mat def summary[rownumb(summary,"preqrep"), 2] = r(mean)
+	/// [33e] Prediction markets beliefs about replication
+	preserve
+		keep if active==1
+		collapse endprice, by(study)
+		sum endprice
+		local e = r(mean)
+		local eN = r(N)
+		local eSE = r(sd)/sqrt(`eN')
+		mat def econ[5,1]=`e'
+		mat def econ[5,2]=`eSE'
+		mat def econ[5,3]=`eN'
+		
+		gen project = 1
+		mkmat endprice project, matrix(endprice_econ)
+
+		use "../use/rpp-market-data.dta", clear
+		keep endprice
+		keep if endprice!=.
+		replace endprice=endprice/100
+		sum endprice
+		local p = r(mean)
+		local pN = r(N)
+		local pSE = r(sd)/sqrt(`pN')
+		mat def psych[5,1]=`p'
+		mat def psych[5,2]=`pSE'
+		mat def psych[5,3]=`pN'
+		
+		gen project = 2
+		mkmat endprice project, matrix(endprice_psych)
 	
-	gen result = 35/97 // Replicated with P<0.05 in original direction (from RPP-paper)
-	qui sum result
-	mat def summary[rownumb(summary,"result"), 2] = r(mean)
+		mat def compare = [endprice_econ \ endprice_psych]
+		
+		clear
+		svmat compare, names(col)
+		
+		ranksum endprice, by(project) // Two-sample Wilcoxon rank-sum (Mann-Whitney) test
+		mat def pvalues[5,1]=2*(1-normal(abs(r(z))))
+	restore
 	
-	gen originrepci = 45/95 // Original effect size within replication 95% CI (from RPP-paper)
-	qui sum originrepci
-	mat def summary[rownumb(summary,"originrepci"), 2] = r(mean)
 	
-	gen metasig = 51/75 // Meta-analytic estimate significant in the original direction (from RPP-paper)
-	qui sum metasig
-	mat def summary[rownumb(summary,"metasig"), 2] = r(mean)
+	/// [33f] Survey beliefs about replication
+	preserve
+		keep if active==1
+		collapse preqrep, by(study)
+		sum preqrep
+		local e = r(mean)
+		local eN = r(N)
+		local eSE = r(sd)/sqrt(`eN')
+		mat def econ[6,1]=`e'
+		mat def econ[6,2]=`eSE'
+		mat def econ[6,3]=`eN'
+		
+		gen project = 1
+		mkmat preqrep project, matrix(preqrep_econ)
+
+		use "../use/rpp-market-data.dta", clear
+		keep preqrep
+		keep if preqrep!=.
+		replace preqrep=preqrep/100
+		sum preqrep
+		local p = r(mean)
+		local pN = r(N)
+		local pSE = r(sd)/sqrt(`pN')
+		mat def psych[6,1]=`p'
+		mat def psych[6,2]=`pSE'
+		mat def psych[6,3]=`pN'
+		
+		gen project = 2
+		mkmat preqrep project, matrix(preqrep_psych)
 	
-	use "../use/rpp-data.dta", clear
-	keep studynum t_rr t_ro t_pval_user t_pval_useo
+		mat def compare = [preqrep_econ \ preqrep_psych]
+		
+		clear
+		svmat compare, names(col)
+		
+		ranksum preqrep, by(project) // Two-sample Wilcoxon rank-sum (Mann-Whitney) test
+		mat def pvalues[6,1]=2*(1-normal(abs(r(z))))
+	restore
 	
-	foreach var in t_rr t_ro t_pval_useo{
-		replace `var'="" if `var'=="NA"
-		destring `var', replace
+	
+	mat def compare = [econ,psych,pvalues]
+	
+	clear
+	svmat compare
+	
+	rename compare1 e
+	rename compare2 eSE
+	rename compare3 eN
+	rename compare4 p
+	rename compare5 pSE
+	rename compare6 pN
+	rename compare7 pvalue
+		
+	label def measurename 1 "Replicated P$<$0.05" ///
+	2 "Original within 95\% CI" ///
+	3 "Meta-estimate P$<$0.05" ///
+	4 "Relative effect size" ///
+	5 "Prediction markets beliefs" ///
+	6 "Survey beliefs"
+	gen measure = _n
+	label values measure measurename
+	
+	foreach var in e p{
+		gen `var'CI = invnormal(0.975)*`var'SE if measure<=3 // Should really be using correction  +0.5/`var'N
+		replace `var'CI = invt(`var'N-1, 0.975)*`var'SE if measure>=4
 	}
 	
-	*** !NOTE! ***
-	* The original effect size mean is slightly different
-	* from what's reported in the RPP paper, this is not an error
-	* as same thing is given with original R scripts and current data
+	gen sig = ""
+	replace sig = "" if pvalue>0.05
+	replace sig = "\textbf{*}" if pvalue<=0.05 & pvalue>0.01
+	replace sig = "\textbf{**}" if pvalue<0.01
 	
-	gen rele = t_rr/t_ro
-	qui sum rele if studynum!=26 & studynum!=89 & studynum!=135
-	mat def summary[rownumb(summary,"rele"), 2] = r(mean)
+	gen pval = ""
+	replace pval = "P$=$0" + string(round(pvalue*1000)/1000)
+	replace pval = "P$<$0.001" if pvalue<0.001
 	
-	* Combined
-	clear
-	svmat summary
-	rename summary1 econ
-	rename summary2 psych
+	sort p
+	gen order = _n
 	
-	gen measure = _n
+	drop ?N pvalue
 	
 	outsheet using "../graphs/fig-3.csv", replace noquote comma
 	
-restore
+use "../use/marketsurveysummary.dta", clear
 
 
 // Fig 4. The Spearman correlation between the original p-value 
@@ -158,37 +345,53 @@ preserve
 	foreach var in result originrepci metasig rele endprice preqrep{
 		qui spearman `var' porig
 		mat def summary[`i',1] = r(rho)
-		if r(p)<=0.05{
-			mat def summary[`i',2] = 1
-		}
-		else{
-			mat def summary[`i',2] = 0
-		}
+		mat def summary[`i',2] = r(p)
+		
 		qui spearman `var' norig
 		mat def summary[`i',3] = r(rho)
-		if r(p)<=0.05{
-			mat def summary[`i',4] = 1
-		}
-		else{
-			mat def summary[`i',4] = 0
-		}
-		local i=`i'+1
+		mat def summary[`i',4] = r(p)
+		
+		local i = `i'+1
 	}
 	
 	clear
 	svmat summary
 	rename summary1 porig
-	rename summary2 porig_sig
+	rename summary2 porig_pval
 	rename summary3 norig
-	rename summary4 norig_sig
+	rename summary4 norig_pval
 	
-	foreach var in porig_sig norig_sig{
+	foreach var in porig_pval norig_pval{
+		replace `var' = 2 if `var'<=0.01 & `var'<1
+		replace `var' = 1 if `var'<=0.05 & `var'<1
+		replace `var' = 0 if `var'>0.05 & `var'<1
+	}
+	
+	foreach var in porig_pval norig_pval{
 		tostring `var', replace
 		replace `var' = "" if `var'=="0"
 		replace `var' = "*" if `var'=="1"
+		replace `var' = "**" if `var'=="2"
 	}
 	
+	label def measurename 1 "Replicated P$<$0.05" ///
+	2 "Original within 95\% CI" ///
+	3 "Meta-estimate P$<$0.05" ///
+	4 "Relative effect size" ///
+	5 "Prediction markets beliefs" ///
+	6 "Survey beliefs"
 	gen measure = _n
+	label values measure measurename
+	
+	// Based on order of figure 3
+	gen order = .
+	replace order = 1 if measure==1
+	replace order = 2 if measure==4
+	replace order = 3 if measure==2
+	replace order = 4 if measure==6
+	replace order = 5 if measure==5
+	replace order = 6 if measure==3
+	sort order
 	
 	outsheet using "../graphs/fig-4.csv", replace noquote comma
 
@@ -351,7 +554,19 @@ preserve
 	outsheet using "../graphs/fig-s4.csv", replace noquote comma
 restore
 
-// Fig S5. Probability of a hypothesis being "true" at three different stages of testing
+// Fig S5. Prediction markets beliefs and survey beliefs
+preserve
+	collapse ref endprice preqrep result, by(study)
+	sort endprice
+	gen order = _n
+	
+	outsheet using "../graphs/fig-s5.csv", replace noquote comma
+	outsheet using "../graphs/fig-s5_rep.csv" if result==1, replace noquote comma
+	outsheet using "../graphs/fig-s5_norep.csv" if result==0, replace noquote comma	
+restore
+
+
+// Fig S6. Probability of a hypothesis being "true" at three different stages of testing
 preserve
 	local j=0
 	forval i=0/3{
@@ -376,5 +591,5 @@ preserve
 	gen temp = _n
 	reshape long lw uw med lq uq, j(prior) i(temp)
 	drop temp
-	outsheet using "../graphs/fig-s5.csv", replace noquote comma
+	outsheet using "../graphs/fig-s6.csv", replace noquote comma
 restore
