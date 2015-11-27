@@ -336,10 +336,7 @@ restore
 * obtain the Chi-square statistic by
 * squaring the z-statistics form a test
 * of proportions.
-	mat drop _all
-	
-	mat def econ = [.,.,.\.,.,.\.,.,.\.,.,.\.,.,.\.,.,.]
-	mat def psych = econ
+ 
 	
 	/// [33a] Replicated with P<0.05 in original direction
 	preserve
@@ -604,4 +601,12 @@ preserve
 	local bulls=r(N)
 	display "Bears: " `bears'
 	display "Bulls: " `bulls'
+restore
+
+
+/// [40] Correlation between average of market price and pre-market survey beliefs and replication outcome
+preserve
+	collapse result erep eorig preqrep endprice, by(study)
+	gen avg = (preqrep + endprice)/2
+	spearman result avg
 restore
