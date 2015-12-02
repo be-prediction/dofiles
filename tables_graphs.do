@@ -7,21 +7,7 @@ use "../use/marketsurveysummary.dta", clear
 *** MAIN PAPER ***
 ******************
 
-// Table 1. Replication results
-preserve
-	collapse ref eorig erep erel porig prep result, by(study)
-	sort ref
-	foreach var in porig prep{
-		replace `var' = 0.00001 if `var'<=0.00001
-		format `var' %12.6f
-	}
-	label def result 1 "Yes" 0 "No"
-	label values result result
-	outsheet using "../tables/tab-1.csv", replace noquote comma	
-restore
-
-
-// Fig 1. Replication results 95% confidence intervals of normalized standardized replication
+// Fig 1a. Replication results 95% confidence intervals of normalized standardized replication
 // effectsizes (correlation coefficient r).
 preserve 
 	collapse ref ereprel ereprell ereprelu, by(study)
@@ -38,11 +24,11 @@ preserve
 		label define study `s' "`newname'", modify
 	}
 	drop ereprel? ref
-	outsheet using "../graphs/fig-1.csv", replace noquote delimiter(";")
+	outsheet using "../graphs/fig-1a.csv", replace noquote delimiter(";")
 restore
 
 
-// Fig 2. Normalized meta-analytic estimates of effect sizes combining the original and replication studies. 
+// Fig 1b. Normalized meta-analytic estimates of effect sizes combining the original and replication studies. 
 // 95% confidence intervals of standardized effect sizes (correlation coefficient r).
 preserve 
 	collapse ref emetarel emetarell emetarelu, by(study)
@@ -60,11 +46,95 @@ preserve
 		label define study `s' "`newname'", modify
 	}
 	drop emetarel? ref
-	outsheet using "../graphs/fig-2.csv", replace noquote delimiter(";")
+	outsheet using "../graphs/fig-1b.csv", replace noquote delimiter(";")
+restore
+
+// Fig 2. Comparison of survey responses and prediction market prices.
+preserve
+	keep if active==1
+	collapse result endprice preqrep, by(study)
+	reg preqrep endprice
+	mat def b=e(b)'
+	mat colnames b=linearfit
+	svmat b, names(col)
+	outsheet using "../graphs/fig-2.csv", replace noquote comma
 restore
 
 
-// Fig 3. A comparison of different reproducibility indicators between experimental economics
+// Fig 3. The Spearman correlation between the original p-value 
+// and the original sample size and different reproducibility indicators.
+preserve
+	keep if active==1
+	collapse result eorig erep emeta erepl erepu emetal emetau endprice preqrep porig norig, by(study)
+	
+	sum result // Replicated with P<0.05 in original direction
+	gen originrepci = (eorig>=erepl & eorig<=erepu) // Original effect size within replication 95% CI
+	*replace originrepci = 1 if erepl>0 & erepl>eorig
+	gen metasig = (emetal>0) // Meta-analytic estimate significant in the original direction
+	gen rele = erep/eorig // Replication effect-size (% of original effect size)
+	sum endprice // Prediction markets beliefs about replication
+	sum preqrep // Survey beliefs about replication
+	
+	keep result originrepci metasig rele endprice preqrep porig norig
+	
+	mat def summary = [.,.,.,.\.,.,.,.\.,.,.,.\.,.,.,.\.,.,.,.\.,.,.,.]
+	local i=1
+	foreach var in result originrepci metasig rele endprice preqrep{
+		qui spearman `var' porig
+		mat def summary[`i',1] = r(rho)
+		mat def summary[`i',2] = r(p)
+		
+		qui spearman `var' norig
+		mat def summary[`i',3] = r(rho)
+		mat def summary[`i',4] = r(p)
+		
+		local i = `i'+1
+	}
+	
+	clear
+	svmat summary
+	rename summary1 porig
+	rename summary2 porig_pval
+	rename summary3 norig
+	rename summary4 norig_pval
+	
+	foreach var in porig_pval norig_pval{
+		replace `var' = 2 if `var'<=0.01 & `var'<1
+		replace `var' = 1 if `var'<=0.05 & `var'<1
+		replace `var' = 0 if `var'>0.05 & `var'<1
+	}
+	
+	foreach var in porig_pval norig_pval{
+		tostring `var', replace
+		replace `var' = "" if `var'=="0"
+		replace `var' = "*" if `var'=="1"
+		replace `var' = "**" if `var'=="2"
+	}
+	
+	label def measurename 1 "Replicated P$<$0.05" ///
+	2 "Original within 95\% CI" ///
+	3 "Meta-estimate P$<$0.05" ///
+	4 "Relative effect size" ///
+	5 "Prediction markets beliefs" ///
+	6 "Survey beliefs"
+	gen measure = _n
+	label values measure measurename
+	
+	// Based on order of figure 3
+	gen order = .
+	replace order = 1 if measure==1
+	replace order = 2 if measure==4
+	replace order = 3 if measure==2
+	replace order = 4 if measure==6
+	replace order = 5 if measure==5
+	replace order = 6 if measure==3
+	sort order
+	
+	outsheet using "../graphs/fig-3.csv", replace noquote comma
+
+restore
+
+// Fig 4. A comparison of different reproducibility indicators between experimental economics
 // and psychological sciences (the Reproducibility Project Psychology)
 use "../use/marketsurveysummary.dta", clear
 	
@@ -105,6 +175,7 @@ use "../use/marketsurveysummary.dta", clear
 		keep if active==1
 		collapse eorig erepl erepu, by(study)
 		gen originrepci = (eorig>=erepl & eorig<=erepu)
+		*replace originrepci = 1 if erepl>0 & erepl>eorig
 		sum originrepci
 		local e = r(mean)
 		local eN = r(N)
@@ -308,8 +379,8 @@ use "../use/marketsurveysummary.dta", clear
 	
 	gen sig = ""
 	replace sig = "" if pvalue>0.05
-	replace sig = "\textbf{*}" if pvalue<=0.05 & pvalue>0.01
-	replace sig = "\textbf{**}" if pvalue<0.01
+	replace sig = "*" if pvalue<=0.05 & pvalue>0.01
+	replace sig = "**" if pvalue<0.01
 	
 	gen pval = ""
 	replace pval = "P$=$0" + string(round(pvalue*1000)/1000)
@@ -320,82 +391,9 @@ use "../use/marketsurveysummary.dta", clear
 	
 	drop ?N pvalue
 	
-	outsheet using "../graphs/fig-3.csv", replace noquote comma
+	outsheet using "../graphs/fig-4.csv", replace noquote comma
 	
 use "../use/marketsurveysummary.dta", clear
-
-
-// Fig 4. The Spearman correlation between the original p-value 
-// and the original sample size and different reproducibility indicators.
-preserve
-	keep if active==1
-	collapse result eorig erep emeta erepl erepu emetal emetau endprice preqrep porig norig, by(study)
-	
-	sum result // Replicated with P<0.05 in original direction
-	gen originrepci = (eorig>=erepl & eorig<=erepu) // Original effect size within replication 95% CI
-	gen metasig = (emetal>0) // Meta-analytic estimate significant in the original direction
-	gen rele = erep/eorig // Replication effect-size (% of original effect size)
-	sum endprice // Prediction markets beliefs about replication
-	sum preqrep // Survey beliefs about replication
-	
-	keep result originrepci metasig rele endprice preqrep porig norig
-	
-	mat def summary = [.,.,.,.\.,.,.,.\.,.,.,.\.,.,.,.\.,.,.,.\.,.,.,.]
-	local i=1
-	foreach var in result originrepci metasig rele endprice preqrep{
-		qui spearman `var' porig
-		mat def summary[`i',1] = r(rho)
-		mat def summary[`i',2] = r(p)
-		
-		qui spearman `var' norig
-		mat def summary[`i',3] = r(rho)
-		mat def summary[`i',4] = r(p)
-		
-		local i = `i'+1
-	}
-	
-	clear
-	svmat summary
-	rename summary1 porig
-	rename summary2 porig_pval
-	rename summary3 norig
-	rename summary4 norig_pval
-	
-	foreach var in porig_pval norig_pval{
-		replace `var' = 2 if `var'<=0.01 & `var'<1
-		replace `var' = 1 if `var'<=0.05 & `var'<1
-		replace `var' = 0 if `var'>0.05 & `var'<1
-	}
-	
-	foreach var in porig_pval norig_pval{
-		tostring `var', replace
-		replace `var' = "" if `var'=="0"
-		replace `var' = "*" if `var'=="1"
-		replace `var' = "**" if `var'=="2"
-	}
-	
-	label def measurename 1 "Replicated P$<$0.05" ///
-	2 "Original within 95\% CI" ///
-	3 "Meta-estimate P$<$0.05" ///
-	4 "Relative effect size" ///
-	5 "Prediction markets beliefs" ///
-	6 "Survey beliefs"
-	gen measure = _n
-	label values measure measurename
-	
-	// Based on order of figure 3
-	gen order = .
-	replace order = 1 if measure==1
-	replace order = 2 if measure==4
-	replace order = 3 if measure==2
-	replace order = 4 if measure==6
-	replace order = 5 if measure==5
-	replace order = 6 if measure==3
-	sort order
-	
-	outsheet using "../graphs/fig-4.csv", replace noquote comma
-
-restore
 
 
 
@@ -428,6 +426,16 @@ preserve
 	outsheet using "../tables/tab-s3.csv", replace noquote comma
 restore
 
+// Table S4. Additional prediciton market results for the 18 replication studies.
+preserve
+	keep if active==1
+	collapse ref result endprice volume investedpoints traders transactions, by(study)
+	sort ref
+	label def result 1 "Yes" 0 "No"
+	label values result result
+	outsheet using "../tables/tab-s4.csv", replace noquote comma
+restore
+
 // Table S4. Survey results for the 18 replication studies.
 preserve
 	bysort study: egen preqrepmeanall = mean(preqrep)
@@ -436,16 +444,6 @@ preserve
 	keep if active==1
 
 	collapse ref result endprice preqrepmeanactive preqrepmeanall postqrep, by(study)
-	sort ref
-	label def result 1 "Yes" 0 "No"
-	label values result result
-	outsheet using "../tables/tab-s4.csv", replace noquote comma
-restore
-
-// Table S5. Additional prediciton market results for the 18 replication studies.
-preserve
-	keep if active==1
-	collapse ref result endprice volume investedpoints traders transactions, by(study)
 	sort ref
 	label def result 1 "Yes" 0 "No"
 	label values result result
@@ -458,6 +456,7 @@ preserve
 	collapse result eorig erep emeta erepl erepu emetal emetau endprice preqrep porig norig, by(study)
 
 	gen originrepci = (eorig>=erepl & eorig<=erepu) // Original effect size within replication 95% CI
+	*replace originrepci = 1 if erepl>0 & erepl>eorig
 	gen metasig = (emetal>0) // Meta-analytic estimate significant in the original direction
 	gen rele = erep/eorig // Replication effect-size (% of original effect size)
 	
@@ -543,27 +542,7 @@ preserve
 	outsheet using "../graphs/fig-s3.csv", replace noquote comma nolab
 restore
 	
-// Fig S4. Comparison of survey responses and prediction market prices.
-preserve
-	keep if active==1
-	collapse result endprice preqrep, by(study)
-	reg preqrep endprice
-	mat def b=e(b)'
-	mat colnames b=linearfit
-	svmat b, names(col)
-	outsheet using "../graphs/fig-s4.csv", replace noquote comma
-restore
 
-// Fig S5. Prediction markets beliefs and survey beliefs
-preserve
-	collapse ref endprice preqrep result, by(study)
-	sort endprice
-	gen order = _n
-	
-	outsheet using "../graphs/fig-s5.csv", replace noquote comma
-	outsheet using "../graphs/fig-s5_rep.csv" if result==1, replace noquote comma
-	outsheet using "../graphs/fig-s5_norep.csv" if result==0, replace noquote comma	
-restore
 
 
 // Fig S6. Probability of a hypothesis being "true" at three different stages of testing

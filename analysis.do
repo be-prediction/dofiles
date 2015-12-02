@@ -362,6 +362,8 @@ restore
 		keep if active==1
 		collapse eorig erepl erepu, by(study)
 		gen originrepci = (eorig>=erepl & eorig<=erepu)
+		*replace originrepci = 1 if erepl>0 & erepl>eorig
+	
 		sum originrepci
 		local e = r(mean)
 		local eN = r(N)
@@ -610,3 +612,84 @@ preserve
 	gen avg = (preqrep + endprice)/2
 	spearman result avg
 restore
+
+
+/// [41] Correlation between citations per month and the reproducibility indicators
+preserve
+	keep if active==1
+	collapse citationspermonth eorig erepl erepu erep emetal porig result endprice preqrep postqrep, by(study)
+	gen originrepci = (eorig>=erepl & eorig<=erepu)
+	*replace originrepci = 1 if erepl>0 & erepl>eorig
+	
+	drop erepl erepu
+	gen metasig = (emetal>0)
+	drop emetal
+	gen rele = erep/eorig
+	drop eorig erep
+	foreach var in result originrepci metasig rele endprice preqrep{
+	spearman citationspermonth `var', stats(rho p)
+	}
+restore
+
+
+/// [42] Transaction types
+preserve
+	use "../use/transactions.dta", replace
+	tab transactiontype
+	*tabulate transactiontype, gen(types)
+	*collapse (sum) type*, by(study)
+	*sum types*, d
+restore
+
+
+/// [43] Correlation between standardized relative effect size and absolute relative effect size
+preserve
+	collapse eorig erep erel_ns, by(study)
+	gen erel=erep/eorig
+	spearman erel erel_ns, stats(rho p)
+
+
+/// TEMP RPP VS OUR STANDARDIZATION
+use "../use/rpp-data.dta", clear
+keep t_teststatisticr t_df1r t_rr t_ro t_n_o_for_tables t_n_r_for_tables t_nr t_no  t_pval_user owithincir
+drop if owithincir==.
+foreach var in t_rr t_ro{
+	replace `var'="" if `var'=="NA"
+	destring `var', replace
+}
+rename t_rr erep
+rename t_ro eorig
+rename t_nr nrep
+rename t_no norig
+rename t_n_o_for_tables norig_tab
+rename t_n_r_for_tables nrep_tab
+rename t_pval_user prep
+rename owithincir originrepci_rpp
+
+rename t_teststatisticr teststat
+rename t_df1r df1
+
+gen special=0
+replace special=1 if teststat=="F" & df1>1
+replace special=1 if teststat=="Chi"
+replace special=1 if teststat=="Chi2"
+
+// r to Fisher's z:
+gen zrep = atanh(erep)
+
+// Variance:
+gen zrepvar = 1/(nrep-3)
+
+// z confidence interval:
+gen zrepl = zrep - invnormal(0.975) * sqrt(zrepvar)
+gen zrepu = zrep + invnormal(0.975) * sqrt(zrepvar)
+
+// Fisher's z to r:
+gen erepl = tanh(zrepl)
+gen erepu = tanh(zrepu)
+
+drop z*
+
+gen originrepci_ours = (eorig>=erepl & eorig<=erepu) if erepl!=.
+
+order erep erepl erepu eorig originrepci_rpp originrepci_ours prep

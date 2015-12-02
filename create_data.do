@@ -403,17 +403,18 @@ format timestamp %tc
 label variable timestamp "Transaction time"
 drop timestamped
 
-/* Note: These seem to have been mislabeled in original data, CHECK THIS */
+/* Note: These seem to have been mislabeled in original data */
 rename buy1orsell1 direction
 label variable direction "Increase (1) or decrease (-1) position"
 label define direction 1 "Increase" -1 "Decrease"
 label values direction direction
+
 rename increase1ordecreaseposition1 ordertype
 label variable ordertype "Buy new shares (1) or sell existing shares (-1)"
 label define ordertype 1 "Buy" -1 "Sell"
 label values ordertype ordertype
-order ordertype, before(direction)
 
+order ordertype, before(direction)
 
 /* Add share positions */
 bysort userid study (transactionid): egen finalholdings = total(numshares)
@@ -469,6 +470,21 @@ drop first
 bysort userid (timestamp): replace cash=round(100-invested,0.1) if _n==1
 bysort userid (timestamp): replace cash=round(cash[_n-1]-invested+returned,0.1) if _n!=1
 replace cash = round(cash,0.1)
+
+/* Gen transaction type */
+gen transactiontype = .
+replace transactiontype = 1 if direction==1 & returned==0  // Buy only
+replace transactiontype = 2 if direction==1 & invested==0  // Sell only
+replace transactiontype = 3 if direction==-1 & returned==0 // Borrow only
+replace transactiontype = 4 if direction==-1 & invested==0 // Return only
+replace transactiontype = 5 if direction==1 & returned>0 & invested>0 // Return and buy
+replace transactiontype = 6 if direction==-1 & returned>0 & invested>0 // Sell and borrow
+
+// One transaction can't be coded due to negative returns is most likely a return only
+replace transactiontype = 4 if direction==1 & ordertype==-1 & returned<0
+
+label def transactiontypes 1 "Buy only" 2 "Sell only" 3 "Borrow only" 4 "Return only" 5 "Return and buy" 6 "Sell and borrow"
+label values transactiontype transactiontypes
 
 /* Check that final cash is correct */
 //bysort userid (timestamp): gen final=(_N==_n)
@@ -770,6 +786,7 @@ gen p2 = .
 replace p2 = ((tempprice-a1)*powrep_plan)/(tempprice*(powrep_plan-a1)) if result==1
 replace p2 = ((tempprice-a1)*(1-powrep_plan))/((1-tempprice)*(powrep_plan-a1)) if result==0
 order p1 p2, after(p0)
+drop tempprice
 
 label var p0 "p0 based on adjusted market prices"
 label var p1 "p1 based on adjusted market prices"
