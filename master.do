@@ -1,13 +1,13 @@
 clear
+set more off
 
-// Eskil's path to parent folder:
-global STATAPATH = "/Users/es.3386/Google Drive/Doktorand/Behavioral pred. markets/Stata/"
+// Set local path to Stata folder here:
+global STATAPATH = "/Users/es.3386/Dropbox/Plugg/Doktorand/Projekt/BERP/Stata/use"
 
-// Innsbruck's path to parent folder:
-*global STATAPATH = "/Users/es.3386/Google Drive/Doktorand/Behavioral pred. markets/Stata/"
 
 cd "${STATAPATH}"
 
-*do "do-private/anonymize_data.do" // Not available to public
-*do "dofiles/create_studydetails.do"  // Not available to public until results are official
-do "dofiles/create_data.do"
+*do "dofiles/create_studydetails.do"
+*do "dofiles/create_data.do"
+*do "dofiles/analysis.do"
+*do "dofiles/tables_graphs.do"

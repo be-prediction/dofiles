@@ -10,11 +10,11 @@ use "../use/marketsurveysummary.dta", clear
 // Fig 1a. Replication results 95% confidence intervals of normalized standardized replication
 // effectsizes (correlation coefficient r).
 preserve 
-	collapse ref ereprel ereprell ereprelu, by(study)
+	collapse ref ereprel ereprell95 ereprelu95, by(study)
 	sort ref
 	gen order = 19-_n
-	gen errorl = abs(ereprell-ereprel)
-	gen erroru = abs(ereprel-ereprelu)
+	gen errorl = abs(ereprell95-ereprel)
+	gen erroru = abs(ereprel-ereprelu95)
 	// Update labels:
 	forval s=1/18{
 		local name: label study `s'
@@ -23,7 +23,7 @@ preserve
 		local newname = subinstr(subinstr("`name'", " (", ", ", .), ")", "", .) + " (`ref')"
 		label define study `s' "`newname'", modify
 	}
-	drop ereprel? ref
+	drop ereprel??? ref
 	outsheet using "../graphs/fig-1a.csv", replace noquote delimiter(";")
 restore
 
@@ -31,12 +31,12 @@ restore
 // Fig 1b. Normalized meta-analytic estimates of effect sizes combining the original and replication studies. 
 // 95% confidence intervals of standardized effect sizes (correlation coefficient r).
 preserve 
-	collapse ref emetarel emetarell emetarelu, by(study)
-	drop if emetarel==.
+	collapse ref emetarel emetarell95 emetarelu95, by(study)
+	drop if emetarell95==.
 	sort ref
 	gen order = 19-_n
-	gen errorl = abs(emetarell-emetarel)
-	gen erroru = abs(emetarel-emetarelu)
+	gen errorl = abs(emetarel-emetarell95)
+	gen erroru = abs(emetarelu95-emetarel)
 	// Update labels:
 	forval s=1/18{
 		local name: label study `s'
@@ -45,7 +45,7 @@ preserve
 		local newname = subinstr(subinstr("`name'", " (", ", ", .), ")", "", .) + " (`ref')"
 		label define study `s' "`newname'", modify
 	}
-	drop emetarel? ref
+	drop emetarel?95 ref
 	outsheet using "../graphs/fig-1b.csv", replace noquote delimiter(";")
 restore
 
@@ -65,12 +65,11 @@ restore
 // and the original sample size and different reproducibility indicators.
 preserve
 	keep if active==1
-	collapse result eorig erep emeta erepl erepu emetal emetau endprice preqrep porig norig, by(study)
+	collapse result eorig erep emeta erepl95 erepu95 emetal95 emetau95 endprice preqrep porig norig, by(study)
 	
 	sum result // Replicated with P<0.05 in original direction
-	gen originrepci = (eorig>=erepl & eorig<=erepu) // Original effect size within replication 95% CI
-	*replace originrepci = 1 if erepl>0 & erepl>eorig
-	gen metasig = (emetal>0) // Meta-analytic estimate significant in the original direction
+	gen originrepci = (eorig>=erepl95 & eorig<=erepu95) // Original effect size within replication 95% CI
+	gen metasig = (emetal95>0) // Meta-analytic estimate significant in the original direction
 	gen rele = erep/eorig // Replication effect-size (% of original effect size)
 	sum endprice // Prediction markets beliefs about replication
 	sum preqrep // Survey beliefs about replication
@@ -110,12 +109,12 @@ preserve
 		replace `var' = "*" if `var'=="1"
 		replace `var' = "**" if `var'=="2"
 	}
-	
+		
 	label def measurename 1 "Replicated P$<$0.05" ///
 	2 "Original within 95\% CI" ///
 	3 "Meta-estimate P$<$0.05" ///
 	4 "Relative effect size" ///
-	5 "Prediction markets beliefs" ///
+	5 "Prediction market beliefs" ///
 	6 "Survey beliefs"
 	gen measure = _n
 	label values measure measurename
@@ -173,9 +172,8 @@ use "../use/marketsurveysummary.dta", clear
 	/// [33b] Original effect size within replication 95% CI
 	preserve
 		keep if active==1
-		collapse eorig erepl erepu, by(study)
-		gen originrepci = (eorig>=erepl & eorig<=erepu)
-		*replace originrepci = 1 if erepl>0 & erepl>eorig
+		collapse eorig erepl95 erepu95, by(study)
+		gen originrepci = (eorig>=erepl95 & eorig<=erepu95)
 		sum originrepci
 		local e = r(mean)
 		local eN = r(N)
@@ -198,8 +196,8 @@ use "../use/marketsurveysummary.dta", clear
 	/// [33c] Meta-analytic estimate significant in the original direction
 	preserve
 		keep if active==1
-		collapse emetal, by(study)
-		gen metasig = (emetal>0)
+		collapse emetal95, by(study)
+		gen metasig = (emetal95>0)
 		sum metasig
 		local e = r(mean)
 		local eN = r(N)
@@ -367,7 +365,7 @@ use "../use/marketsurveysummary.dta", clear
 	2 "Original within 95\% CI" ///
 	3 "Meta-estimate P$<$0.05" ///
 	4 "Relative effect size" ///
-	5 "Prediction markets beliefs" ///
+	5 "Prediction market beliefs" ///
 	6 "Survey beliefs"
 	gen measure = _n
 	label values measure measurename
@@ -403,7 +401,7 @@ use "../use/marketsurveysummary.dta", clear
 
 // Table S1. Prediction market results for the 18 replication studies
 preserve
-	collapse ref porig eorig prep erep result erel erel_ns, by(study)
+	collapse ref porig eorig norig prep erep nrep_act result erel erel_ns, by(study)
 	sort ref
 	label def result 1 "Yes" 0 "No"
 	label values result result
@@ -416,7 +414,12 @@ restore
 
 // Table S3. Prediction market results for the 18 replication studies
 preserve
-	collapse  ref result endprice poworig powrep_plan powrep_act p0 p1 p2, by(study)
+	bysort study: egen preqrepmeanall = mean(preqrep)
+	bysort study: egen preqrepmeanactive = mean(preqrep) if active==1
+	
+	keep if active==1
+	
+	collapse  ref result powrep_plan powrep_act endprice preqrepmeanactive preqrepmeanall postqrep, by(study)
 	sort ref
 	label def result 1 "Yes" 0 "No"
 	label values result result
@@ -436,28 +439,13 @@ preserve
 	outsheet using "../tables/tab-s4.csv", replace noquote comma
 restore
 
-// Table S4. Survey results for the 18 replication studies.
-preserve
-	bysort study: egen preqrepmeanall = mean(preqrep)
-	bysort study: egen preqrepmeanactive = mean(preqrep) if active==1
-
-	keep if active==1
-
-	collapse ref result endprice preqrepmeanactive preqrepmeanall postqrep, by(study)
-	sort ref
-	label def result 1 "Yes" 0 "No"
-	label values result result
-	outsheet using "../tables/tab-s5.csv", replace noquote comma
-restore
-
-// Table S6.
+// Table S5.
 preserve
 	keep if active==1
-	collapse result eorig erep emeta erepl erepu emetal emetau endprice preqrep porig norig, by(study)
+	collapse result eorig erep emeta erepl95 erepu95 emetal95 emetau95 endprice preqrep porig norig, by(study)
 
-	gen originrepci = (eorig>=erepl & eorig<=erepu) // Original effect size within replication 95% CI
-	*replace originrepci = 1 if erepl>0 & erepl>eorig
-	gen metasig = (emetal>0) // Meta-analytic estimate significant in the original direction
+	gen originrepci = (eorig>=erepl95 & eorig<=erepu95) // Original effect size within replication 95% CI
+	gen metasig = (emetal95>0) // Meta-analytic estimate significant in the original direction
 	gen rele = erep/eorig // Replication effect-size (% of original effect size)
 	
 	keep result originrepci metasig rele endprice preqrep porig norig
@@ -479,7 +467,7 @@ preserve
 	forval i = 1/8{
 		forval j = 1/8{
 			if `j'<=`i'{
-				replace rho`j'=p`j'[`i'] if _n==[8+`i']
+				replace rho`j'=p`j'[`i'] if _n==[8+`i'] & p`j'[`i']!=0
 			}
 			else{
 				replace rho`j'=. if _n==[`i']
@@ -496,24 +484,65 @@ preserve
 		replace rho`i' = "("+ rho`i' + ")" if type==2 & rho`i'!=""
 	}
 	
-	label def measures 1 "Replicated P<0.05" 2 "Original within 95<CI" 3 "Meta-estimate P<0.05" ///
-	4 "Relative effect size" 5 "Prediction markets beliefs" 6 "Survey beliefs" ///
-	7 "Original p-value" 8 "Original sample size"
+	label def measures 1 "Replicated P<0.05" 2 "Original within 95\% CI" 3 "Meta-estimate P<0.05" ///
+	4 "Relative Effect Size (\emph{r})" 5 "Market Belief" 6 "Survey Belief" ///
+	7 "Original p-value" 8 "Original Sample Size"
 	label values order measures
 	order order
 	replace order=. if type==2
 	drop type
 
-	outsheet using "../tables/tab-s6.csv", replace noquote comma
+	outsheet using "../tables/tab-s5.csv", replace noquote comma
 restore
 
-// Fig S1. Comparison of original and replication effect sizes
+// Fig S1a. Replication results 95% confidence intervals of normalized standardized replication
+// effectsizes (correlation coefficient r).
+preserve 
+	collapse ref eorig erep erepl95 erepu95, by(study)
+	sort ref
+	gen order = 19-_n
+	gen errorl = abs(erepl95-erep)
+	gen erroru = abs(erep-erepu95)
+	// Update labels:
+	forval s=1/18{
+		local name: label study `s'
+		qui sum ref if study==`s'
+		local ref = r(mean)
+		local newname = subinstr(subinstr("`name'", " (", ", ", .), ")", "", .) + " (`ref')"
+		label define study `s' "`newname'", modify
+	}
+	drop erep??? ref
+	outsheet using "../graphs/fig-s1a.csv", replace noquote delimiter(";")
+restore
+
+// Fig S1b. Normalized meta-analytic estimates of effect sizes combining the original and replication studies. 
+// 95% confidence intervals of standardized effect sizes (correlation coefficient r).
+preserve 
+	collapse ref eorig emeta emetal95 emetau95, by(study)
+	drop if emetal95==.
+	sort ref
+	gen order = 19-_n
+	gen errorl = abs(emeta-emetal95)
+	gen erroru = abs(emetau95-emeta)
+	// Update labels:
+	forval s=1/18{
+		local name: label study `s'
+		qui sum ref if study==`s'
+		local ref = r(mean)
+		local newname = subinstr(subinstr("`name'", " (", ", ", .), ")", "", .) + " (`ref')"
+		label define study `s' "`newname'", modify
+	}
+	drop emeta?95 ref
+	outsheet using "../graphs/fig-s1b.csv", replace noquote delimiter(";")
+restore
+
+// Fig S2. Comparison of original and replication effect sizes
 preserve
 	collapse result eorig erep, by(study)
-	outsheet using "../graphs/fig-s1.csv", replace noquote comma
+	outsheet using "../graphs/fig-s2.csv", replace noquote comma
 restore
 
-// Fig S3. Final positions per participant and market.
+// Fig S4. Final positions per participant and market.
 preserve
 	keep if active==1
 	collapse ref finalholdings, by(study userid)
@@ -539,36 +568,5 @@ preserve
 	}
 	
 	keep ref tempid holdingtype
-	outsheet using "../graphs/fig-s3.csv", replace noquote comma nolab
-restore
-	
-
-
-
-// Fig S6. Probability of a hypothesis being "true" at three different stages of testing
-preserve
-	local j=0
-	forval i=0/3{
-		local if
-		if `i'==2{
-			local if "if result==0"
-		}
-		else if `i'==3{
-			local if "if result==1"
-			local j = 2
-		}
-		egen lw`i' = min(p`j') `if'
-		egen uw`i' = max(p`j') `if'
-		egen med`i' = pctile(p`j') `if', p(50)
-		egen lq`i' = pctile(p`j') `if', p(25)
-		egen uq`i' = pctile(p`j') `if', p(75)
-		local j = `j' + 1
-	}
-	
-	collapse ?w? med? ?q?
-	
-	gen temp = _n
-	reshape long lw uw med lq uq, j(prior) i(temp)
-	drop temp
-	outsheet using "../graphs/fig-s6.csv", replace noquote comma
+	outsheet using "../graphs/fig-s4.csv", replace noquote comma nolab
 restore

@@ -2,11 +2,6 @@ clear
 cd "${STATAPATH}"
 
 
-// Parameters
-global b = 100
-global k = 1
-
-
 /* Clean RPP data
 ---------------------------------------------------------*/
 import delimited "../raw/rpp_data.csv", encoding(ISO-8859-1)
@@ -186,19 +181,16 @@ label variable enddate "Start date"
 drop enddate
 rename enddate2 enddate
 
-
 // Only used finished survey for participants who've started many
 duplicates tag userid, generate(dup)
 drop if finished==0 & dup!=0
 drop dup
 
-
-// Keep only last survey for participants who finished more than one (!)
+// Only keep last survey for participants who finished more than one (!)
 duplicates tag userid, generate(dup)
 bysort userid finished (enddate): gen last=(_n==_N)
 drop if dup==1 & finished==1 & last!=1
 drop last dup
-
 
 // Only keep participants who were invited to the market
 merge 1:1 userid using "../use/activetraders.dta"
@@ -206,13 +198,11 @@ drop _merge
 label variable active "Active trader in the markets"
 keep if active!=.
 
-
-// Save
+// Save wide data
 preserve
 drop q*
 save "../temp/pre-market-survey-wide.dta", replace
 restore
-
 
 // Reshape long
 drop startdate enddate position yiacad age gender affiliation country nationality core active finished
@@ -240,10 +230,8 @@ label variable preenddate "End date of first survey"
 rename finished prefinished
 label variable prefinished "First survey finished"
 
-
 // Rescale likelihood answers from 0-100 to 0-1
 replace preqrep = preqrep/100
-
 
 save "../use/pre-market-survey.dta", replace
 
@@ -293,26 +281,22 @@ label variable enddate "Start date"
 drop enddate
 rename enddate2 enddate
 
-
 // Only used finished survey for participants who've started many
 duplicates tag userid, generate(dup)
 drop if finished==0 & dup!=0
 drop dup
 
-
-// Keep only last survey for participants who finished more than one (!)
+// Only keep last survey for participants who finished more than one (!)
 duplicates tag userid, generate(dup)
 bysort userid finished (enddate): gen last=(_n==_N)
 drop if dup==1 & finished==1 & last!=1
 drop last dup
-
 
 // Only keep participants who were traded in the markets
 merge 1:1 userid using "../use/activetraders.dta"
 drop _merge
 label variable active "Active trader in the markets"
 drop if active == 0
-
 
 // Reshape long
 reshape long qa qc, i(startdate enddate finished userid) j(study)
@@ -329,12 +313,10 @@ label variable postqrep "Likelihood of hypothesis to replicate (2nd survey)"
 rename qc postqrepcon
 label variable postqrepcon "Confidence in likelihood of hypothesis to replicate (2nd survey)"
 
-
 // Rescale likelihood answers from 0-100 to 0-1
 replace postqrep = postqrep/100
 
 save "../use/post-market-survey.dta", replace
-
 
 
 /* Clean transaction data
@@ -394,7 +376,7 @@ foreach var in "numshares" "netsales" "price"{
 	destring `var', replace
 }
 
-drop if numshares==. // Drop failed transactions (CHECK THIS)
+drop if numshares==. // Drop failed transactions
 
 replace timestamped = substr(timestamped,1,19)
 gen double timestamp = clock(timestamped, "YMDhms")
@@ -403,7 +385,7 @@ format timestamp %tc
 label variable timestamp "Transaction time"
 drop timestamped
 
-/* Note: These seem to have been mislabeled in original data */
+/* Note: These seem to have been mislabeled in original market data */
 rename buy1orsell1 direction
 label variable direction "Increase (1) or decrease (-1) position"
 label define direction 1 "Increase" -1 "Decrease"
@@ -416,12 +398,14 @@ label values ordertype ordertype
 
 order ordertype, before(direction)
 
-/* Add share positions */
+// Add share positions
 bysort userid study (transactionid): egen finalholdings = total(numshares)
 label var finalholdings "User's final holdings in the market"
 
+// Correct cash position calculations
+global b = 100
+global k = 1
 
-/* Correct cash position calculations */
 bysort study userid (timestamp): gen userholdings = numshares if _n==1
 gen returned = 0
 gen invested = 0
@@ -471,7 +455,7 @@ bysort userid (timestamp): replace cash=round(100-invested,0.1) if _n==1
 bysort userid (timestamp): replace cash=round(cash[_n-1]-invested+returned,0.1) if _n!=1
 replace cash = round(cash,0.1)
 
-/* Gen transaction type */
+// Gen transaction type
 gen transactiontype = .
 replace transactiontype = 1 if direction==1 & returned==0  // Buy only
 replace transactiontype = 2 if direction==1 & invested==0  // Sell only
@@ -486,14 +470,9 @@ replace transactiontype = 4 if direction==1 & ordertype==-1 & returned<0
 label def transactiontypes 1 "Buy only" 2 "Sell only" 3 "Borrow only" 4 "Return only" 5 "Return and buy" 6 "Sell and borrow"
 label values transactiontype transactiontypes
 
-/* Check that final cash is correct */
-//bysort userid (timestamp): gen final=(_N==_n)
-//bro credit cash if final==1 & credit!=cash
-/* Small differences due to rounding issues with selling for tiny share positions, overall fine. */
-
 save "../use/transactions.dta", replace
 
-/* Gen study summary */
+// Gen study summary
 preserve
 
 drop if numshares==.
@@ -521,8 +500,7 @@ label var investedpoints "Number of points invested in the market"
 save "../temp/studysummary.dta", replace
 restore
 
-
-/* Gen trader summary */
+// Gen trader summary
 preserve
 bysort userid study (timestamp): gen investmentworth = invested if _n==1
 bysort userid study (timestamp): replace investmentworth = max(investmentworth[_n-1]+invested-returned,0) if _n!=1
@@ -531,24 +509,13 @@ bysort userid study: egen meantokens = mean(invested) if invested!=0
 collapse (count) transactionid (sum) direction (last) finalholdings (last) investmentworth (max) meantokens, by(userid study)
 rename transactionid C
 rename direction S
-gen int decreasecount = . // a
-gen int increasecount = . // b
+gen int decreasecount = .
+gen int increasecount = .
 replace decreasecount = (C-S)/2
 replace increasecount = decreasecount + S
-
-// To get how many increase/decrease transactions were made
-// -a + b = S
-//  a + b = C
-//  S + a = b
-//  a + S + a = C => a = (C - S)2
-
 drop C S
 
-/* Check that finalholdings are correct */
-// merge 1:1 userid study using "use/finalholdings.dta", keep(match master)
-/* finalholdings are exactly the same result as those in "prediction-market-user-share-positions" */
-
-/* Add system's final credit */
+// Add system's final credit
 merge m:1 userid using "../use/finalcredit.dta", keep(match master)
 drop _merge
 rename credit finalcredit
@@ -598,7 +565,6 @@ label variable premin "Minutes spent on 1st survey"
 gen postmin = (postenddate - poststartdate)/(1000*60)
 label variable postmin "Minutes spent on 2st survey"
 order premin postmin, after(qkno)
-
 
 foreach var in country nationality core{
 	replace `var' = subinstr(strtrim(strlower(`var')),".","",.)
@@ -744,14 +710,12 @@ forval i = 1/`maxlen'{
 }
 drop temp
 
-
-
-/* Add study summary */
+// Add study summary
 merge m:1 study using "../temp/studysummary.dta", keep(match master)
 order endprice traders transactions volume endsales, after(study)
 drop _merge
 
-/* Add trader summary */
+// Add trader summary
 merge 1:1 userid study using "../temp/tradersummary.dta", keep(match master)
 drop _merge
 bysort userid: egen temp = max(finalcredit)
@@ -766,37 +730,15 @@ replace investmentworth=0 if investmentworth==.
 
 order finalholdings finalcredit increasecount decreasecount meantokens investmentworth, after(qkno)
 
-/* Add study details */
+// Add study details
 merge m:1 study using "../use/studydetails.dta", keep(match master)
 drop _merge
 
 order ref, after(study)
 
-
-/* Add priors */
-*** !NOTE ***
-* If the market price is above the planned power,
-* a fake price is set to 0.01 below the planned power.
-
-gen tempprice = endprice
-replace tempprice = powrep_plan - 0.01 if powrep_plan<tempprice
-gen p1 = (tempprice-a1)/(powrep_plan-a1) // Since all replicated findings are positive, use planned power as that's what traders knew
-gen p0 = p1*a0/(p1*a0+(1-p1)*poworig) // Since all replicated findings are positive
-gen p2 = .
-replace p2 = ((tempprice-a1)*powrep_plan)/(tempprice*(powrep_plan-a1)) if result==1
-replace p2 = ((tempprice-a1)*(1-powrep_plan))/((1-tempprice)*(powrep_plan-a1)) if result==0
-order p1 p2, after(p0)
-drop tempprice
-
-label var p0 "p0 based on adjusted market prices"
-label var p1 "p1 based on adjusted market prices"
-label var p2 "p2 based on adjusted market prices"
-
-
-/* Create relative effect sizes */
+// Create relative effect sizes
 gen erel = erep/eorig
 label var erel "Relative effect size (r) of replication to original"
 
-
-/* Save */
+// Save
 save "../use/marketsurveysummary.dta", replace

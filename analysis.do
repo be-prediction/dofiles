@@ -1,9 +1,16 @@
 clear
-set more off
+cd "${STATAPATH}"
 
 use "../use/marketsurveysummary.dta", clear
-sort study userid
 
+/*
+Analysis order (Main paper):
+1,27,33,3,24,25,26,27,28,29,32,9,10,2,30,46,7,32,12,4,11,45
+
+
+Analysis order (Supplementary):
+43,34,35,42,30,31,13,40,14,15,16,17,18,19,20,21,36,37,22,38,39, 47
+*/
 
 
 /// [1] Number of significant Replications, with confidence interval
@@ -247,7 +254,7 @@ preserve
 restore
 
 
-/// [24] Test if actual replication rate deviates from expected (based on power)
+/// [24] Test if actual replication rate deviates from expected (based on power) CHECK
 preserve
 	collapse result powrep_plan, by(study)
 	qui sum powrep_plan
@@ -258,17 +265,17 @@ restore
 
 /// [25] Mean number of original effect sizes within the 95% CI of the effect size estimate in the replication
 preserve
-	collapse eorig erepl erepu, by(study)
-	gen within = (erepl<=eorig & eorig<=erepu)
+	collapse eorig erepl95 erepu95, by(study)
+	gen within = (erepl95<=eorig & eorig<=erepu95)
 	mean within
 restore
 
 /// [26] Mean number of original effect sizes within the 95% CI of the effect size estimate in the replication
 /// (inlcuding de CLippel et al.)
 preserve
-	collapse eorig erep erepl erepu, by(study)
-	gen within = (erepl<=eorig & eorig<=erepu)
-	replace within = 1 if erep>0 & erepl>eorig
+	collapse eorig erep erepl95 erepu95, by(study)
+	gen within = (erepl95<=eorig & eorig<=erepu95)
+	replace within = 1 if erep>0 & erepl95>eorig
 	mean within
 restore
 
@@ -321,8 +328,8 @@ restore
 
 /// [32] Meta-effect statistics
 preserve
-	collapse emeta emetal, by(study)
-	gen sigmeta = (0<emetal)
+	collapse emeta emetal95, by(study)
+	gen sigmeta = (0<emetal95)
 	mean sigmeta
 restore
 
@@ -336,6 +343,13 @@ restore
 * obtain the Chi-square statistic by
 * squaring the z-statistics form a test
 * of proportions.
+
+	mat drop _all
+
+	mat def econ = [.,.,.\.,.,.\.,.,.\.,.,.\.,.,.\.,.,.]
+	mat def psych = econ
+	
+	mat def pvalues = [.\.\.\.\.\.]
  
 	
 	/// [33a] Replicated with P<0.05 in original direction
@@ -360,9 +374,9 @@ restore
 	/// [33b] Original effect size within replication 95% CI
 	preserve
 		keep if active==1
-		collapse eorig erepl erepu, by(study)
-		gen originrepci = (eorig>=erepl & eorig<=erepu)
-		*replace originrepci = 1 if erepl>0 & erepl>eorig
+		collapse eorig erepl95 erepu95, by(study)
+		gen originrepci = (eorig>=erepl95 & eorig<=erepu95)
+		*replace originrepci = 1 if erepl95>0 & erepl95>eorig
 	
 		sum originrepci
 		local e = r(mean)
@@ -382,8 +396,8 @@ restore
 	/// [33c] Meta-analytic estimate significant in the original direction
 	preserve
 		keep if active==1
-		collapse emetal, by(study)
-		gen metasig = (emetal>0)
+		collapse emetal95, by(study)
+		gen metasig = (emetal95>0)
 		sum metasig
 		local e = r(mean)
 		local eN = r(N)
@@ -617,13 +631,13 @@ restore
 /// [41] Correlation between citations per month and the reproducibility indicators
 preserve
 	keep if active==1
-	collapse citationspermonth eorig erepl erepu erep emetal porig result endprice preqrep postqrep, by(study)
-	gen originrepci = (eorig>=erepl & eorig<=erepu)
-	*replace originrepci = 1 if erepl>0 & erepl>eorig
+	collapse citationspermonth eorig erepl95 erepu95 erep emetal95 porig result endprice preqrep postqrep, by(study)
+	gen originrepci = (eorig>=erepl95 & eorig<=erepu95)
+	*replace originrepci = 1 if erepl95>0 & erepl95>eorig
 	
-	drop erepl erepu
-	gen metasig = (emetal>0)
-	drop emetal
+	drop erepl95 erepu95
+	gen metasig = (emetal95>0)
+	drop emetal95
 	gen rele = erep/eorig
 	drop eorig erep
 	foreach var in result originrepci metasig rele endprice preqrep{
@@ -647,49 +661,88 @@ preserve
 	collapse eorig erep erel_ns, by(study)
 	gen erel=erep/eorig
 	spearman erel erel_ns, stats(rho p)
+restore
 
 
-/// TEMP RPP VS OUR STANDARDIZATION
-use "../use/rpp-data.dta", clear
-keep t_teststatisticr t_df1r t_rr t_ro t_n_o_for_tables t_n_r_for_tables t_nr t_no  t_pval_user owithincir
-drop if owithincir==.
-foreach var in t_rr t_ro{
-	replace `var'="" if `var'=="NA"
-	destring `var', replace
-}
-rename t_rr erep
-rename t_ro eorig
-rename t_nr nrep
-rename t_no norig
-rename t_n_o_for_tables norig_tab
-rename t_n_r_for_tables nrep_tab
-rename t_pval_user prep
-rename owithincir originrepci_rpp
+/// [44] Small telescopes approach
+preserve
+	collapse eorig e33orig erep erepl90 erepu90 erepl95 erepu95, by(study)
+	gen originrepci = (eorig>=erepl95 & eorig<=erepu95)
+	gen e33inrepci = e33orig<=erepu90
+restore
 
-rename t_teststatisticr teststat
-rename t_df1r df1
 
-gen special=0
-replace special=1 if teststat=="F" & df1>1
-replace special=1 if teststat=="Chi"
-replace special=1 if teststat=="Chi2"
+/// [45] The Spearman correlation between the original p-value 
+/// and the original sample size and different reproducibility indicators.
+preserve
+	keep if active==1
+	collapse result eorig erep emeta erepl95 erepu95 emetal95 emetau95 endprice preqrep porig norig, by(study)
+	
+	sum result // Replicated with P<0.05 in original direction
+	gen originrepci = (eorig>=erepl95 & eorig<=erepu95) // Original effect size within replication 95% CI
+	*replace originrepci = 1 if erepl95>0 & erepl95>eorig
+	gen metasig = (emetal95>0) // Meta-analytic estimate significant in the original direction
+	gen rele = erep/eorig // Replication effect-size (% of original effect size)
+	sum endprice // Prediction markets beliefs about replication
+	sum preqrep // Survey beliefs about replication
+	
+	keep result originrepci metasig rele endprice preqrep porig norig
+	
+	local i=1
+	foreach var in result originrepci metasig rele endprice preqrep{
+		spearman `var' porig
+		spearman `var' norig
+	}
+restore
 
-// r to Fisher's z:
-gen zrep = atanh(erep)
 
-// Variance:
-gen zrepvar = 1/(nrep-3)
+/// [46] The Spearman correlation between the original p-value and original sample size
+preserve
+	collapse porig norig, by(study)
+	spearman porig norig, stats(rho p)
+restore
 
-// z confidence interval:
-gen zrepl = zrep - invnormal(0.975) * sqrt(zrepvar)
-gen zrepu = zrep + invnormal(0.975) * sqrt(zrepvar)
 
-// Fisher's z to r:
-gen erepl = tanh(zrepl)
-gen erepu = tanh(zrepu)
+/// [47] Summary statistics of the Spearman correlation between the original p-value 
+/// and the original sample size and different reproducibility indicators [45] when
+/// excluding one study at a time
+preserve
+	keep if active==1
+	collapse result eorig erep emeta erepl95 erepu95 emetal95 emetau95 endprice preqrep porig norig, by(study)
+	
+	sum result // Replicated with P<0.05 in original direction
+	gen originrepci = (eorig>=erepl95 & eorig<=erepu95) // Original effect size within replication 95% CI
+	*replace originrepci = 1 if erepl95>0 & erepl95>eorig
+	gen metasig = (emetal95>0) // Meta-analytic estimate significant in the original direction
+	gen rele = erep/eorig // Replication effect-size (% of original effect size)
+	sum endprice // Prediction markets beliefs about replication
+	sum preqrep // Survey beliefs about replication
+	
+	keep result originrepci metasig rele endprice preqrep porig norig study
+	
 
-drop z*
+	foreach var in result originrepci metasig rele endprice preqrep{
+		capture mat drop porigsummary
+		capture mat drop norigsummary
+		forval s=1/18{
+			qui spearman `var' porig if study!=`s'
+			mat porigsummary = (nullmat(porigsummary) \ [r(rho), r(p), r(N), `s'])
+			qui spearman `var' norig if study!=`s'
+			mat norigsummary = (nullmat(norigsummary) \ [r(rho), r(p), r(N), `s'])
+		}
+		mat colnames porigsummary = rho p n s
+		svmat porigsummary, n(col)
+		display "`var' porig summary:"
+		sum rho p
+		drop rho p n s
+		
+		mat colnames norigsummary = rho p n s
+		svmat norigsummary, n(col)
+		display "`var' norig summary:"
+		sum rho p
+		drop rho p n s
+	}
 
-gen originrepci_ours = (eorig>=erepl & eorig<=erepu) if erepl!=.
-
-order erep erepl erepu eorig originrepci_rpp originrepci_ours prep
+	
+	
+restore
